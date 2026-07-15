@@ -1,32 +1,28 @@
-// Vercel Edge Function — proxy seguro para la API de Anthropic
-// La API key nunca llega al navegador
+// Vercel Edge Function — proxy para Google Gemini API (gratuito)
 
 export const config = { runtime: 'edge' }
 
 export default async function handler(req) {
-  // Solo POST
+  if (req.method === 'OPTIONS') {
+    return new Response(null, {
+      status: 200,
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'POST, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type',
+      }
+    })
+  }
+
   if (req.method !== 'POST') {
     return new Response('Method not allowed', { status: 405 })
   }
 
-  // CORS — permite solo tu dominio en producción
-  const origin = req.headers.get('origin') || ''
-  const allowedOrigins = [
-    'http://localhost:3000',
-    'https://macro-fire.vercel.app',
-    // Agrega tu dominio personalizado aquí si tienes uno
-  ]
-  const corsOrigin = allowedOrigins.includes(origin) ? origin : allowedOrigins[0]
-
   const corsHeaders = {
-    'Access-Control-Allow-Origin': corsOrigin,
+    'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type',
-  }
-
-  // Preflight
-  if (req.method === 'OPTIONS') {
-    return new Response(null, { status: 200, headers: corsHeaders })
+    'Content-Type': 'application/json',
   }
 
   try {
@@ -34,37 +30,74 @@ export default async function handler(req) {
     const { messages, max_tokens = 2000 } = body
 
     if (!messages || !Array.isArray(messages)) {
-      return new Response(JSON.stringify({ error: 'messages requerido' }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      return new Response(JSON.stringify({ error: { message: 'messages requerido' } }), {
+        status: 400, headers: corsHeaders
       })
     }
 
-    // Llamada a Anthropic con la key del servidor
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'anthropic-version': '2023-06-01',
-        'x-api-key': process.env.ANTHROPIC_API_KEY,
-      },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens,
-        messages,
-      }),
+    const apiKey = process.env.GEMINI_API_KEY
+    if (!apiKey) {
+      return new Response(JSON.stringify({ error: { message: 'GEMINI_API_KEY no configurada' } }), {
+        status: 500, headers: corsHeaders
+      })
+    }
+
+    const geminiContents = messages.map(msg => {
+      const parts = []
+      if (typeof msg.content === 'string') {
+        parts.push({ text: msg.content })
+      } else if (Array.isArray(msg.content)) {
+        for (const block of msg.content) {
+          if (block.type === 'text') {
+            parts.push({ text: block.text })
+          } else if (block.type === 'image') {
+            parts.push({
+              inlineData: {
+                mimeType: block.source.media_type,
+                data: block.source.data,
+              }
+            })
+          }
+        }
+      }
+      return {
+        role: msg.role === 'assistant' ? 'model' : 'user',
+        parts,
+      }
     })
 
-    const data = await response.json()
-
-    return new Response(JSON.stringify(data), {
-      status: response.status,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    })
-  } catch (err) {
-    return new Response(
-      JSON.stringify({ error: { message: err.message } }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    const geminiResp = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: geminiContents,
+          generationConfig: {
+            maxOutputTokens: max_tokens,
+            temperature: 0.4,
+          }
+        })
+      }
     )
+
+    const geminiData = await geminiResp.json()
+
+    if (!geminiResp.ok) {
+      return new Response(JSON.stringify({
+        error: { message: geminiData?.error?.message || `Gemini error ${geminiResp.status}` }
+      }), { status: geminiResp.status, headers: corsHeaders })
+    }
+
+    const text = geminiData?.candidates?.[0]?.content?.parts?.[0]?.text || ''
+
+    return new Response(JSON.stringify({
+      content: [{ type: 'text', text }]
+    }), { status: 200, headers: corsHeaders })
+
+  } catch (err) {
+    return new Response(JSON.stringify({
+      error: { message: err.message }
+    }), { status: 500, headers: corsHeaders })
   }
 }
