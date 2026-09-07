@@ -58,6 +58,92 @@ const FOOD_DB = {
   "pepino":                { cal:16,  prot:0.7, carbs:3.6,  fat:0.1,  fiber:0.5 },
   "pimentón rojo":         { cal:31,  prot:1,   carbs:6,    fat:0.3,  fiber:2.1 },
   "kale":                  { cal:49,  prot:4.3, carbs:9,    fat:0.9,  fiber:3.6 },
+
+  // Proteínas adicionales
+  "pechuga de pavo":       { cal:135, prot:30,  carbs:0,    fat:1.7,  fiber:0   },
+  "chuleta de cerdo":      { cal:231, prot:25,  carbs:0,    fat:14,   fiber:0   },
+  "chorizo":               { cal:335, prot:19,  carbs:2.6,  fat:28,   fiber:0   },
+  "jamón de pavo":         { cal:104, prot:17,  carbs:2.5,  fat:2.5,  fiber:0   },
+  "tocino":                { cal:541, prot:37,  carbs:1.4,  fat:42,   fiber:0   },
+  "atún en aceite":        { cal:198, prot:25,  carbs:0,    fat:11,   fiber:0   },
+  "pulpo":                 { cal:82,  prot:15,  carbs:2.2,  fat:1,    fiber:0   },
+  "mejillones":            { cal:86,  prot:12,  carbs:3.7,  fat:2.2,  fiber:0   },
+  "conejo":                { cal:173, prot:33,  carbs:0,    fat:3.5,  fiber:0   },
+  "hígado de res":         { cal:135, prot:20,  carbs:3.9,  fat:3.6,  fiber:0   },
+  "huevo cocido":          { cal:155, prot:13,  carbs:1.1,  fat:11,   fiber:0   },
+  "edamame":               { cal:121, prot:11,  carbs:9.9,  fat:5,    fiber:5.2 },
+  "seitán":                { cal:370, prot:75,  carbs:14,   fat:1.9,  fiber:0.6 },
+  "carne molida 80%":      { cal:254, prot:17,  carbs:0,    fat:20,   fiber:0   },
+  "costilla de cerdo":     { cal:277, prot:26,  carbs:0,    fat:19,   fiber:0   },
+
+  // Lácteos
+  "leche entera":          { cal:61,  prot:3.2, carbs:4.8,  fat:3.3,  fiber:0   },
+  "leche de almendra":     { cal:15,  prot:0.6, carbs:0.6,  fat:1.2,  fiber:0.3 },
+  "leche de avena":        { cal:47,  prot:1,   carbs:7.7,  fat:1.5,  fiber:0.8 },
+  "queso panela":          { cal:250, prot:19,  carbs:2.6,  fat:19,   fiber:0   },
+  "queso fresco":          { cal:264, prot:18,  carbs:3.5,  fat:20,   fiber:0   },
+  "queso cottage":         { cal:98,  prot:11,  carbs:3.4,  fat:4.3,  fiber:0   },
+  "queso crema":           { cal:342, prot:6,   carbs:4.1,  fat:34,   fiber:0   },
+  "queso parmesano":       { cal:431, prot:38,  carbs:4.1,  fat:29,   fiber:0   },
+  "kéfir":                 { cal:41,  prot:3.8, carbs:4.5,  fat:1,    fiber:0   },
+  "yogur natural":         { cal:61,  prot:3.5, carbs:4.7,  fat:3.3,  fiber:0   },
+
+  // Carbohidratos / granos
+  "cuscús cocido":         { cal:112, prot:3.8, carbs:23,   fat:0.2,  fiber:1.4 },
+  "maíz dulce":            { cal:96,  prot:3.4, carbs:21,   fat:1.5,  fiber:2.4 },
+  "yuca cocida":           { cal:112, prot:0.6, carbs:27,   fat:0.3,  fiber:1.8 },
+  "ñame cocido":           { cal:118, prot:1.5, carbs:28,   fat:0.2,  fiber:4.1 },
+  "pan blanco":            { cal:265, prot:9,   carbs:49,   fat:3.2,  fiber:2.7 },
+  "tortilla de maíz":      { cal:218, prot:5.7, carbs:44,   fat:2.9,  fiber:6.3 },
+  "tortilla de harina":    { cal:312, prot:8.2, carbs:52,   fat:8.1,  fiber:2.8 },
+  "avena cruda":           { cal:379, prot:13,  carbs:68,   fat:6.5,  fiber:10  },
+  "granola":               { cal:471, prot:10,  carbs:64,   fat:20,   fiber:7   },
+  "galletas integrales":   { cal:414, prot:9,   carbs:71,   fat:11,   fiber:8.5 },
+  "arroz jazmín cocido":   { cal:129, prot:2.4, carbs:28,   fat:0.2,  fiber:0.4 },
+  "fideos de arroz":       { cal:109, prot:1.8, carbs:25,   fat:0.2,  fiber:0.9 },
+
+  // Legumbres
+  "frijoles rojos":        { cal:127, prot:8.7, carbs:23,   fat:0.5,  fiber:6.4 },
+  "frijoles blancos":      { cal:139, prot:9.7, carbs:25,   fat:0.4,  fiber:6.3 },
+  "habas cocidas":         { cal:110, prot:7.6, carbs:20,   fat:0.4,  fiber:5.4 },
+  "arvejas cocidas":       { cal:84,  prot:5.4, carbs:14,   fat:0.4,  fiber:5.5 },
+
+  // Frutas
+  "naranja":               { cal:47,  prot:0.9, carbs:12,   fat:0.1,  fiber:2.4 },
+  "piña":                  { cal:50,  prot:0.5, carbs:13,   fat:0.1,  fiber:1.4 },
+  "papaya":                { cal:43,  prot:0.5, carbs:11,   fat:0.3,  fiber:1.7 },
+  "fresas":                { cal:32,  prot:0.7, carbs:7.7,  fat:0.3,  fiber:2   },
+  "uvas":                  { cal:69,  prot:0.7, carbs:18,   fat:0.2,  fiber:0.9 },
+  "sandía":                { cal:30,  prot:0.6, carbs:8,    fat:0.2,  fiber:0.4 },
+  "melón":                 { cal:34,  prot:0.8, carbs:8.2,  fat:0.2,  fiber:0.9 },
+  "pera":                  { cal:57,  prot:0.4, carbs:15,   fat:0.1,  fiber:3.1 },
+  "durazno":               { cal:39,  prot:0.9, carbs:9.5,  fat:0.3,  fiber:1.5 },
+  "kiwi":                  { cal:61,  prot:1.1, carbs:15,   fat:0.5,  fiber:3   },
+  "maracuyá":              { cal:97,  prot:2.2, carbs:23,   fat:0.7,  fiber:10.4},
+  "guayaba":               { cal:68,  prot:2.6, carbs:14,   fat:1,    fiber:5.4 },
+  "limón":                 { cal:29,  prot:1.1, carbs:9.3,  fat:0.3,  fiber:2.8 },
+
+  // Verduras
+  "lechuga":               { cal:15,  prot:1.4, carbs:2.9,  fat:0.2,  fiber:1.3 },
+  "cebolla":               { cal:40,  prot:1.1, carbs:9.3,  fat:0.1,  fiber:1.7 },
+  "coliflor":              { cal:25,  prot:1.9, carbs:5,    fat:0.3,  fiber:2   },
+  "calabacín":             { cal:17,  prot:1.2, carbs:3.1,  fat:0.3,  fiber:1   },
+  "berenjena":             { cal:25,  prot:1,   carbs:6,    fat:0.2,  fiber:3   },
+  "apio":                  { cal:16,  prot:0.7, carbs:3,    fat:0.2,  fiber:1.6 },
+  "remolacha":             { cal:43,  prot:1.6, carbs:10,   fat:0.2,  fiber:2.8 },
+  "champiñones":           { cal:22,  prot:3.1, carbs:3.3,  fat:0.3,  fiber:1   },
+  "ajo":                   { cal:149, prot:6.4, carbs:33,   fat:0.5,  fiber:2.1 },
+
+  // Grasas y frutos secos
+  "mantequilla":           { cal:717, prot:0.9, carbs:0.1,  fat:81,   fiber:0   },
+  "mantequilla de maní":   { cal:588, prot:25,  carbs:20,   fat:50,   fiber:6   },
+  "aceite de coco":        { cal:862, prot:0,   carbs:0,    fat:100,  fiber:0   },
+  "mayonesa":              { cal:680, prot:1,   carbs:0.6,  fat:75,   fiber:0   },
+  "semillas de girasol":   { cal:584, prot:21,  carbs:20,   fat:51,   fiber:8.6 },
+  "semillas de calabaza":  { cal:559, prot:30,  carbs:11,   fat:49,   fiber:6   },
+  "coco rallado":          { cal:354, prot:3.3, carbs:15,   fat:33,   fiber:9   },
+  "nuez de macadamia":     { cal:718, prot:7.9, carbs:14,   fat:76,   fiber:8.6 },
+  "pistachos":             { cal:560, prot:20,  carbs:28,   fat:45,   fiber:10  },
 }
 
 const GOAL_PRESETS = {
@@ -218,6 +304,10 @@ function MacroFireApp({ session }) {
   const [grams, setGrams]         = useState('')
   const [sugg, setSugg]           = useState([])
   const [mealType, setMealType]   = useState('Desayuno')
+  const recentsKey = `macrofire:recentFoods:${userId}`
+  const [recentFoods, setRecentFoods] = useState(() => {
+    try { return JSON.parse(localStorage.getItem(recentsKey)) || [] } catch { return [] }
+  })
 
   // Calculator
   const [calc, setCalc]     = useState({ weight:'', height:'', age:'', sex:'male', activity:'1.55', goal:'Mantenimiento' })
@@ -286,13 +376,19 @@ function MacroFireApp({ session }) {
     setSugg(v.length>1 ? Object.keys(FOOD_DB).filter(f=>f.toLowerCase().includes(v.toLowerCase())).slice(0,7) : [])
   }
 
-  const handleAddFood = async (name=foodInput) => {
-    const food = FOOD_DB[name.toLowerCase().trim()]; if(!food) return
-    const g = parseFloat(grams)||100, r=g/100
-    const meal = { name, grams:g, cal:Math.round(food.cal*r*10)/10, prot:Math.round(food.prot*r*10)/10, carbs:Math.round(food.carbs*r*10)/10, fat:Math.round(food.fat*r*10)/10, fiber:Math.round((food.fiber||0)*r*10)/10, meal_type:mealType }
+  const handleAddFood = async (name=foodInput, gramsOverride=null) => {
+    const key = name.toLowerCase().trim()
+    const food = FOOD_DB[key]; if(!food) return
+    const g = gramsOverride ?? (parseFloat(grams)||100), r=g/100
+    const meal = { name:key, grams:g, cal:Math.round(food.cal*r*10)/10, prot:Math.round(food.prot*r*10)/10, carbs:Math.round(food.carbs*r*10)/10, fat:Math.round(food.fat*r*10)/10, fiber:Math.round((food.fiber||0)*r*10)/10, meal_type:mealType }
     try {
       const saved = await addMeal(userId, meal, today)
       setMeals(p=>[...p, saved])
+      setRecentFoods(p=>{
+        const u=[key,...p.filter(f=>f!==key)].slice(0,8)
+        try{ localStorage.setItem(recentsKey, JSON.stringify(u)) }catch{}
+        return u
+      })
     } catch(e){ console.error(e) }
     setFoodInput(''); setGrams(''); setSugg([])
   }
@@ -461,13 +557,30 @@ Escribe el JSON entre estos markers:
       const imc=(w/(h/100)**2).toFixed(1)
       const perc=`PERFIL: ${context.name||'Cliente'}, ${isMale?'H':'M'}, ${a}a, ${w}kg, ${h}cm, IMC ${imc}\nOBJETIVO: ${context.goal} | Actividad: ${context.activity} | ${nMeals} comidas\nRESTRICCIONES: ${context.restrictions||'Ninguna'} | SALUD: ${context.conditions||'Ninguna'}\nMACROS: ${targetKcal}kcal | P${protG}g | C${carbsG}g | G${fatG}g`
 
-      const [r1,r2] = await Promise.all([
-        callClaude([{role:'user',content:`Nutricionista deportivo. Primera mitad del plan.\n${perc}\nReglas: ${Math.round(w*0.3)}-${Math.round(w*0.4)}g prot/comida, alimentos latinos accesibles, sin ${context.restrictions||'ninguna restricción'}, cada día suma ${targetKcal}kcal±15.\nResponde SOLO JSON entre ===JSON1=== markers:\n===JSON1===\n{"resumen":{"objetivo":"","estrategia":"","calorias_diarias":${targetKcal},"proteina_g":${protG},"carbos_g":${carbsG},"grasa_g":${fatG},"comidas_dia":${nMeals},"tdee":${tdee}},"valoracion":"4-5 frases análisis IMC ${imc}, estrategia ${context.goal}, expectativas realistas","progreso_esperado":"semanas 1-2: X, semanas 3-4: Y","dias":[{"dia":"Lunes","tipo":"Entrenamiento","total_kcal":${targetKcal},"total_prot":${protG},"total_carbs":${carbsG},"total_fat":${fatG},"comidas":[{"nombre":"Desayuno","hora":"07:30","alimentos":[{"item":"","cantidad":"Xg","kcal":0,"prot":0,"carbs":0,"fat":0}],"total_kcal":0,"total_prot":0,"total_carbs":0,"total_fat":0,"notas":""}]}]}\n===JSON1===\nIncluye Lunes(entreno), Martes(descanso), Miércoles(entreno), Jueves(descanso). ${nMeals} comidas/día.`}], 4000),
-        callClaude([{role:'user',content:`Nutricionista deportivo. Segunda mitad del plan.\n${perc}\nViernes(entreno), Sábado(descanso), Domingo(recuperación). ${nMeals} comidas/día, ${targetKcal}kcal±15, alimentos latinos, sin ${context.restrictions||'ninguna restricción'}.\nResponde SOLO JSON entre ===JSON2=== markers:\n===JSON2===\n{"dias_resto":[{"dia":"Viernes","tipo":"Entrenamiento","total_kcal":${targetKcal},"total_prot":${protG},"total_carbs":${carbsG},"total_fat":${fatG},"comidas":[{"nombre":"Desayuno","hora":"07:30","alimentos":[{"item":"","cantidad":"Xg","kcal":0,"prot":0,"carbs":0,"fat":0}],"total_kcal":0,"total_prot":0,"total_carbs":0,"total_fat":0,"notas":""}]}],"lista_mercado":{"proteinas":[""],"carbohidratos":[""],"grasas_saludables":[""],"verduras_frutas":[""],"lacteos_otros":[""]},"hidratacion":"","suplementos":"","consejos":["","","","",""]}\n===JSON2===`}], 4000),
-      ])
+      // Rotación de proteína principal por día para forzar variedad real entre los 7 días,
+      // en vez de depender de que el modelo lo recuerde entre las dos llamadas en paralelo.
+      const PROTEIN_ROTATION = ['pollo','res magra','pescado o mariscos','huevo y legumbres','pavo','cerdo magro','pescado y pollo combinados']
+      const dayPlan = ['Lunes','Martes','Miércoles','Jueves','Viernes','Sábado','Domingo'].map((dia,i)=>({
+        dia, tipo: i===5?'Descanso':i===6?'Recuperación':i%2===0?'Entrenamiento':'Descanso', proteina: PROTEIN_ROTATION[i]
+      }))
+      const rotStr = arr => arr.map(d=>`${d.dia}(${d.tipo}, proteína base: ${d.proteina})`).join(', ')
+      const varietyRule = 'Varía las guarniciones, vegetales y método de cocción de un día a otro aunque la proteína base se repita. No repitas el mismo platillo completo dos veces en la semana.'
 
-      const ex=(txt,tag)=>{const re=new RegExp(`===${tag}===\\s*([\\s\\S]*?)\\s*===${tag}===`);const m=txt.match(re);return m?m[1].trim():txt.trim()}
-      const p1=robustParse(ex(r1,'JSON1')), p2=robustParse(ex(r2,'JSON2'))
+      const fetchPlanPart = async (prompt, tag, maxTok) => {
+        for (let attempt=0; attempt<2; attempt++) {
+          const raw = await callClaude([{role:'user',content:prompt}], maxTok)
+          const re = new RegExp(`===${tag}===\\s*([\\s\\S]*?)\\s*===${tag}===`)
+          const m = raw.match(re)
+          const parsed = robustParse(m?m[1].trim():raw.trim())
+          if (parsed) return parsed
+        }
+        return null
+      }
+
+      const [p1, p2] = await Promise.all([
+        fetchPlanPart(`Nutricionista deportivo. Primera mitad del plan.\n${perc}\nDías a generar: ${rotStr(dayPlan.slice(0,4))}.\nReglas: ${Math.round(w*0.3)}-${Math.round(w*0.4)}g prot/comida, alimentos latinos accesibles, sin ${context.restrictions||'ninguna restricción'}, cada día suma ${targetKcal}kcal±15. ${varietyRule}\nResponde SOLO JSON entre ===JSON1=== markers:\n===JSON1===\n{"resumen":{"objetivo":"","estrategia":"","calorias_diarias":${targetKcal},"proteina_g":${protG},"carbos_g":${carbsG},"grasa_g":${fatG},"comidas_dia":${nMeals},"tdee":${tdee}},"valoracion":"4-5 frases análisis IMC ${imc}, estrategia ${context.goal}, expectativas realistas","progreso_esperado":"semanas 1-2: X, semanas 3-4: Y","dias":[{"dia":"Lunes","tipo":"Entrenamiento","total_kcal":${targetKcal},"total_prot":${protG},"total_carbs":${carbsG},"total_fat":${fatG},"comidas":[{"nombre":"Desayuno","hora":"07:30","alimentos":[{"item":"","cantidad":"Xg","kcal":0,"prot":0,"carbs":0,"fat":0}],"total_kcal":0,"total_prot":0,"total_carbs":0,"total_fat":0,"notas":""}]}]}\n===JSON1===\n${nMeals} comidas/día.`, 'JSON1', 4000),
+        fetchPlanPart(`Nutricionista deportivo. Segunda mitad del plan.\n${perc}\nDías a generar: ${rotStr(dayPlan.slice(4))}.\n${nMeals} comidas/día, ${targetKcal}kcal±15, alimentos latinos, sin ${context.restrictions||'ninguna restricción'}. ${varietyRule}\nResponde SOLO JSON entre ===JSON2=== markers:\n===JSON2===\n{"dias_resto":[{"dia":"Viernes","tipo":"Entrenamiento","total_kcal":${targetKcal},"total_prot":${protG},"total_carbs":${carbsG},"total_fat":${fatG},"comidas":[{"nombre":"Desayuno","hora":"07:30","alimentos":[{"item":"","cantidad":"Xg","kcal":0,"prot":0,"carbs":0,"fat":0}],"total_kcal":0,"total_prot":0,"total_carbs":0,"total_fat":0,"notas":""}]}],"lista_mercado":{"proteinas":[""],"carbohidratos":[""],"grasas_saludables":[""],"verduras_frutas":[""],"lacteos_otros":[""]},"hidratacion":"","suplementos":"","consejos":["","","","",""]}\n===JSON2===`, 'JSON2', 4000),
+      ])
       if(!p1) throw new Error('Error en primera parte. Intenta de nuevo.')
       if(!p2) throw new Error('Error en segunda parte. Intenta de nuevo.')
 
@@ -510,6 +623,9 @@ Escribe el JSON entre estos markers:
   )
 
   const MEAL_TYPES = ['Desayuno','Almuerzo','Cena','Snack','Pre-entreno','Post-entreno']
+  const MEAL_ICONS = { 'Desayuno':'🌅','Almuerzo':'🍽️','Cena':'🌙','Snack':'🍎','Pre-entreno':'⚡','Post-entreno':'💪' }
+  const foodPreview = FOOD_DB[foodInput.toLowerCase().trim()]
+  const previewG = parseFloat(grams)||100
   const GOAL_META  = {'Pérdida de Grasa':{icon:'↓',sub:'–300 kcal'},'Mantenimiento':{icon:'⟷',sub:'Neutro'},'Ganancia Muscular':{icon:'↑',sub:'+300 kcal'},'Rendimiento':{icon:'⚡',sub:'+300 kcal'}}
   const inp = {background:T.bg,border:`1.5px solid ${T.border}`,borderRadius:10,color:T.text,padding:'11px 14px',fontSize:14,outline:'none',width:'100%',transition:'border-color 0.15s'}
 
@@ -587,9 +703,19 @@ Escribe el JSON entre estos markers:
               <SLabel>Agregar alimento</SLabel>
               <div style={{display:'flex',gap:5,marginBottom:10,overflowX:'auto',paddingBottom:2}}>
                 {MEAL_TYPES.map(mt=>(
-                  <button key={mt} onClick={()=>setMealType(mt)} style={{flexShrink:0,padding:'5px 10px',border:`1.5px solid ${mealType===mt?T.prot:T.border}`,borderRadius:20,background:mealType===mt?T.protBg:T.surface,color:mealType===mt?T.prot:T.sub,cursor:'pointer',fontSize:11,fontWeight:600,transition:'all .15s',whiteSpace:'nowrap'}}>{mt}</button>
+                  <button key={mt} onClick={()=>setMealType(mt)} style={{flexShrink:0,padding:'5px 10px',border:`1.5px solid ${mealType===mt?T.prot:T.border}`,borderRadius:20,background:mealType===mt?T.protBg:T.surface,color:mealType===mt?T.prot:T.sub,cursor:'pointer',fontSize:11,fontWeight:600,transition:'all .15s',whiteSpace:'nowrap'}}>{MEAL_ICONS[mt]} {mt}</button>
                 ))}
               </div>
+              {recentFoods.length>0&&(
+                <div style={{marginBottom:10}}>
+                  <div style={{fontSize:9,fontWeight:700,color:T.muted,textTransform:'uppercase',letterSpacing:'0.1em',marginBottom:6}}>Recientes · toca para agregar 100g</div>
+                  <div style={{display:'flex',gap:6,overflowX:'auto',paddingBottom:2}}>
+                    {recentFoods.filter(f=>FOOD_DB[f]).map(f=>(
+                      <button key={f} onClick={()=>handleAddFood(f,100)} style={{flexShrink:0,padding:'6px 12px',border:`1px solid ${T.border}`,borderRadius:20,background:T.bg,color:T.sub,cursor:'pointer',fontSize:11,fontWeight:600,whiteSpace:'nowrap'}}>{f}</button>
+                    ))}
+                  </div>
+                </div>
+              )}
               <div style={{position:'relative',marginBottom:10}}>
                 <Inp value={foodInput} onChange={e=>onFoodChange(e.target.value)} onKeyDown={e=>e.key==='Enter'&&handleAddFood()} placeholder="Busca un alimento…"/>
                 {sugg.length>0&&<div style={{position:'absolute',top:'calc(100% + 4px)',left:0,right:0,background:T.surface,border:`1px solid ${T.border}`,borderRadius:12,zIndex:100,overflow:'hidden',boxShadow:'0 8px 24px rgba(0,0,0,0.1)'}}>
@@ -605,6 +731,14 @@ Escribe el JSON entre estos markers:
                 <Inp value={grams} onChange={e=>setGrams(e.target.value)} placeholder="Gramos (default 100)" type="number" style={{flex:1}}/>
                 <BtnPrimary onClick={()=>handleAddFood()} style={{width:'auto',padding:'11px 20px'}}>+ Agregar</BtnPrimary>
               </div>
+              {foodPreview&&(
+                <div style={{marginTop:10,background:T.protBg,borderRadius:8,padding:'8px 12px',fontSize:11,color:T.prot,fontWeight:600,display:'flex',gap:10,flexWrap:'wrap'}}>
+                  <span>{Math.round(foodPreview.cal*previewG/100)} kcal</span>
+                  <span>P {Math.round(foodPreview.prot*previewG/100*10)/10}g</span>
+                  <span>C {Math.round(foodPreview.carbs*previewG/100*10)/10}g</span>
+                  <span>G {Math.round(foodPreview.fat*previewG/100*10)/10}g</span>
+                </div>
+              )}
             </Card>
 
             {meals.length>0?(
@@ -618,7 +752,7 @@ Escribe el JSON entre estos markers:
                 </div>
                 {MEAL_TYPES.filter(mt=>meals.some(m=>(m.meal_type||m.mealType)===mt)).map(mt=>(
                   <div key={mt} style={{marginBottom:12}}>
-                    <div style={{fontSize:10,fontWeight:700,color:T.prot,textTransform:'uppercase',letterSpacing:'0.08em',marginBottom:6,paddingBottom:4,borderBottom:`1px solid ${T.protBg}`}}>{mt}</div>
+                    <div style={{fontSize:10,fontWeight:700,color:T.prot,textTransform:'uppercase',letterSpacing:'0.08em',marginBottom:6,paddingBottom:4,borderBottom:`1px solid ${T.protBg}`}}>{MEAL_ICONS[mt]} {mt}</div>
                     {meals.filter(m=>(m.meal_type||m.mealType)===mt).map(m=>(
                       <div key={m.id} style={{display:'flex',alignItems:'center',gap:8,padding:'8px 6px',borderRadius:8}}>
                         <div style={{flex:1,minWidth:0}}>
