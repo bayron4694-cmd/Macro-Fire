@@ -433,17 +433,30 @@ function MacroFireApp({ session }) {
   }
 
   // ── API helper — calls our Vercel Edge Function ────────────────────────────
-  const callClaude = async (messages, maxTok=2000) => {
-    const resp = await fetch('/api/claude', {
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ messages, max_tokens:maxTok }),
-    })
-    const txt = await resp.text()
-    if(!resp.ok){ let msg=`HTTP ${resp.status}`; try{const j=JSON.parse(txt);msg=j?.error?.message||msg}catch{}; throw new Error(msg) }
-    let d; try{d=JSON.parse(txt)}catch{throw new Error('Respuesta inválida del servidor')}
-    if(d.error) throw new Error(`${d.error.type}: ${d.error.message}`)
-    return d.content.map(c=>c.text||'').join('')
+  const TRANSIENT_STATUS = new Set([429,500,502,503,504])
+  const callClaude = async (messages, maxTok=2000, retries=2) => {
+    for (let attempt=0; ; attempt++) {
+      let resp, txt
+      try {
+        resp = await fetch('/api/claude', {
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({ messages, max_tokens:maxTok }),
+        })
+        txt = await resp.text()
+      } catch (e) {
+        if (attempt<retries) { await new Promise(r=>setTimeout(r, 1000*(attempt+1))); continue }
+        throw new Error('No se pudo conectar con el servidor. Intenta de nuevo.')
+      }
+      if(!resp.ok){
+        if (TRANSIENT_STATUS.has(resp.status) && attempt<retries) { await new Promise(r=>setTimeout(r, 1000*(attempt+1))); continue }
+        let msg=`HTTP ${resp.status}`; try{const j=JSON.parse(txt);msg=j?.error?.message||msg}catch{}
+        throw new Error(resp.status===504?'El servidor tardó demasiado en responder. Intenta con menos días o de nuevo.':msg)
+      }
+      let d; try{d=JSON.parse(txt)}catch{throw new Error('Respuesta inválida del servidor')}
+      if(d.error) throw new Error(`${d.error.type}: ${d.error.message}`)
+      return d.content.map(c=>c.text||'').join('')
+    }
   }
 
   const robustParse = str => {
@@ -566,7 +579,7 @@ Escribe el JSON entre estos markers:
       const rotStr = arr => arr.map(d=>`${d.dia}(${d.tipo}, proteína base: ${d.proteina})`).join(', ')
       const varietyRule = 'Varía las guarniciones, vegetales y método de cocción de un día a otro aunque la proteína base se repita. No repitas el mismo platillo completo dos veces en la semana.'
 
-      const fetchPlanPart = async (prompt, tag, maxTok) => {
+      const fetchJsonPart = async (prompt, tag, maxTok) => {
         for (let attempt=0; attempt<2; attempt++) {
           const raw = await callClaude([{role:'user',content:prompt}], maxTok)
           const re = new RegExp(`===${tag}===\\s*([\\s\\S]*?)\\s*===${tag}===`)
@@ -577,14 +590,25 @@ Escribe el JSON entre estos markers:
         return null
       }
 
-      const [p1, p2] = await Promise.all([
-        fetchPlanPart(`Nutricionista deportivo. Primera mitad del plan.\n${perc}\nDías a generar: ${rotStr(dayPlan.slice(0,4))}.\nReglas: ${Math.round(w*0.3)}-${Math.round(w*0.4)}g prot/comida, alimentos latinos accesibles, sin ${context.restrictions||'ninguna restricción'}, cada día suma ${targetKcal}kcal±15. ${varietyRule}\nResponde SOLO JSON entre ===JSON1=== markers:\n===JSON1===\n{"resumen":{"objetivo":"","estrategia":"","calorias_diarias":${targetKcal},"proteina_g":${protG},"carbos_g":${carbsG},"grasa_g":${fatG},"comidas_dia":${nMeals},"tdee":${tdee}},"valoracion":"4-5 frases análisis IMC ${imc}, estrategia ${context.goal}, expectativas realistas","progreso_esperado":"semanas 1-2: X, semanas 3-4: Y","dias":[{"dia":"Lunes","tipo":"Entrenamiento","total_kcal":${targetKcal},"total_prot":${protG},"total_carbs":${carbsG},"total_fat":${fatG},"comidas":[{"nombre":"Desayuno","hora":"07:30","alimentos":[{"item":"","cantidad":"Xg","kcal":0,"prot":0,"carbs":0,"fat":0}],"total_kcal":0,"total_prot":0,"total_carbs":0,"total_fat":0,"notas":""}]}]}\n===JSON1===\n${nMeals} comidas/día.`, 'JSON1', 4000),
-        fetchPlanPart(`Nutricionista deportivo. Segunda mitad del plan.\n${perc}\nDías a generar: ${rotStr(dayPlan.slice(4))}.\n${nMeals} comidas/día, ${targetKcal}kcal±15, alimentos latinos, sin ${context.restrictions||'ninguna restricción'}. ${varietyRule}\nResponde SOLO JSON entre ===JSON2=== markers:\n===JSON2===\n{"dias_resto":[{"dia":"Viernes","tipo":"Entrenamiento","total_kcal":${targetKcal},"total_prot":${protG},"total_carbs":${carbsG},"total_fat":${fatG},"comidas":[{"nombre":"Desayuno","hora":"07:30","alimentos":[{"item":"","cantidad":"Xg","kcal":0,"prot":0,"carbs":0,"fat":0}],"total_kcal":0,"total_prot":0,"total_carbs":0,"total_fat":0,"notas":""}]}],"lista_mercado":{"proteinas":[""],"carbohidratos":[""],"grasas_saludables":[""],"verduras_frutas":[""],"lacteos_otros":[""]},"hidratacion":"","suplementos":"","consejos":["","","","",""]}\n===JSON2===`, 'JSON2', 4000),
-      ])
-      if(!p1) throw new Error('Error en primera parte. Intenta de nuevo.')
-      if(!p2) throw new Error('Error en segunda parte. Intenta de nuevo.')
+      // Llamadas pequeñas y rápidas en vez de 1-2 llamadas gigantes: cada llamada de Gemini
+      // debe empezar a responder en <25s (límite de las Edge Functions de Vercel), así que
+      // pedir 7 días completos en 1-2 tandas de 4000 tokens es lo que provocaba los 504.
+      const dayGroups = [dayPlan.slice(0,2), dayPlan.slice(2,4), dayPlan.slice(4,6), dayPlan.slice(6)]
+      const commonRules = `Reglas: ${Math.round(w*0.3)}-${Math.round(w*0.4)}g prot/comida, alimentos latinos accesibles, sin ${context.restrictions||'ninguna restricción'}, considera ${context.conditions||'ninguna condición'}, cada día suma ${targetKcal}kcal±15. ${varietyRule}`
 
-      const combined={...p1, plan_semanal:[...(p1.dias||[]),...(p2.dias_resto||[])], lista_mercado:p2.lista_mercado, hidratacion:p2.hidratacion, suplementos:p2.suplementos, consejos:p2.consejos, _context:{...context,targetKcal,protG,carbsG,fatG,tdee}}
+      const metaPromise = fetchJsonPart(`Nutricionista deportivo. Resumen general del plan (sin comidas detalladas).\n${perc}\nResponde SOLO JSON entre ===META=== markers:\n===META===\n{"resumen":{"objetivo":"","estrategia":"","calorias_diarias":${targetKcal},"proteina_g":${protG},"carbos_g":${carbsG},"grasa_g":${fatG},"comidas_dia":${nMeals},"tdee":${tdee}},"valoracion":"4-5 frases análisis IMC ${imc}, estrategia ${context.goal}, expectativas realistas","progreso_esperado":"semanas 1-2: X, semanas 3-4: Y","lista_mercado":{"proteinas":[""],"carbohidratos":[""],"grasas_saludables":[""],"verduras_frutas":[""],"lacteos_otros":[""]},"hidratacion":"","suplementos":"","consejos":["","","","",""]}\n===META===`, 'META', 900)
+
+      const dayPromises = dayGroups.map((group,i)=>{
+        const tag = `DIAS${i+1}`
+        return fetchJsonPart(`Nutricionista deportivo. Genera SOLO estos días del plan semanal: ${rotStr(group)}.\n${perc}\n${commonRules}\nResponde SOLO JSON entre ===${tag}=== markers:\n===${tag}===\n{"dias":[{"dia":"${group[0].dia}","tipo":"${group[0].tipo}","total_kcal":${targetKcal},"total_prot":${protG},"total_carbs":${carbsG},"total_fat":${fatG},"comidas":[{"nombre":"Desayuno","hora":"07:30","alimentos":[{"item":"","cantidad":"Xg","kcal":0,"prot":0,"carbs":0,"fat":0}],"total_kcal":0,"total_prot":0,"total_carbs":0,"total_fat":0,"notas":""}]}]}\n===${tag}===\n${nMeals} comidas/día. Genera ${group.length} día(s): ${group.map(d=>d.dia).join(', ')}.`, tag, 2200)
+      })
+
+      const [meta, ...dayResults] = await Promise.all([metaPromise, ...dayPromises])
+      if(!meta) throw new Error('Error generando el resumen del plan. Intenta de nuevo.')
+      if(dayResults.some(d=>!d)) throw new Error('Error generando algunos días del plan. Intenta de nuevo.')
+
+      const plan_semanal = dayResults.flatMap(d=>d.dias||[])
+      const combined={...meta, plan_semanal, _context:{...context,targetKcal,protG,carbsG,fatG,tdee}}
       setPlan(combined)
       try { await savePlan(userId, combined, context) } catch(e){ console.error('Save plan error:',e) }
     } catch(e){ setPlanErr(e.message) }
