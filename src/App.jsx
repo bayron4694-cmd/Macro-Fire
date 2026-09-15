@@ -259,6 +259,116 @@ const DayCard = ({ dia }) => {
   )
 }
 
+// ─── ONBOARDING ───────────────────────────────────────────────────────────────
+const OB_ACT_MAP = { sedentario:1.2, ligero:1.375, moderado:1.55, activo:1.725, 'muy activo':1.9 }
+const OB_GOAL_META = { 'Pérdida de Grasa':{icon:'↓',sub:'Déficit de 300 kcal'}, 'Mantenimiento':{icon:'⟷',sub:'Calorías de mantenimiento'}, 'Ganancia Muscular':{icon:'↑',sub:'Superávit de 300 kcal'}, 'Rendimiento':{icon:'⚡',sub:'Enfocado en rendimiento'} }
+
+const Onboarding = ({ userId, onComplete, onSkip }) => {
+  const [step, setStep] = useState(0)
+  const [saving, setSaving] = useState(false)
+  const [err, setErr] = useState(null)
+  const [ob, setOb] = useState({ name:'', weight:'', height:'', age:'', sex:'male', activity:'moderado', goal:'Mantenimiento' })
+  const set = patch => setOb(p=>({...p, ...patch}))
+
+  const canNext = step===0 ? (ob.weight && ob.height && ob.age) : true
+
+  const results = (() => {
+    const w=+ob.weight, h=+ob.height, a=+ob.age
+    if(!w||!h||!a) return null
+    const bmr = ob.sex==='male' ? 10*w+6.25*h-5*a+5 : 10*w+6.25*h-5*a-161
+    const tdee = Math.round(bmr*(OB_ACT_MAP[ob.activity]||1.55))
+    const p = GOAL_PRESETS[ob.goal]
+    return { target_cal:tdee+p.calFixed, prot:Math.round(w*p.protGkg), carbs:Math.round(w*p.carbGkg), fat:Math.round(w*p.fatGkg), cal_fixed:p.calFixed, tdee, bmr:Math.round(bmr), water:Math.round(w*35), dist:p.dist, note:p.note, prot_range:p.protRange, carb_range:p.carbRange, fat_range:p.fatRange }
+  })()
+
+  const finish = async () => {
+    if(!results) return
+    setSaving(true); setErr(null)
+    try {
+      const profileData = { name:ob.name, height:+ob.height, age:+ob.age, sex:ob.sex, activity:ob.activity, goal:ob.goal, start_weight:+ob.weight, start_date:new Date().toISOString().split('T')[0] }
+      const [savedProfile, savedGoals] = await Promise.all([
+        upsertProfile(userId, profileData),
+        upsertGoals(userId, results),
+      ])
+      onComplete(savedProfile, savedGoals)
+    } catch(e){ setErr(e.message) }
+    setSaving(false)
+  }
+
+  return (
+    <div style={{ minHeight:'100vh', background:T.bg, display:'flex', alignItems:'center', justifyContent:'center', padding:20 }}>
+      <div style={{ width:'100%', maxWidth:420 }}>
+        <div style={{ textAlign:'center', marginBottom:24 }}>
+          <div style={{ width:52, height:52, borderRadius:14, background:T.text, display:'flex', alignItems:'center', justifyContent:'center', fontSize:24, margin:'0 auto 14px' }}>⚡</div>
+          <div style={{ fontSize:20, fontFamily:"'Syne',sans-serif", fontWeight:800 }}>Configuremos tu perfil</div>
+          <div style={{ fontSize:12, color:T.muted, marginTop:4 }}>Toma menos de un minuto</div>
+        </div>
+        <div style={{ display:'flex', gap:6, justifyContent:'center', marginBottom:16 }}>
+          {[0,1,2].map(i=><div key={i} style={{ width:i===step?22:7, height:7, borderRadius:99, background:i<=step?T.prot:T.border, transition:'all .25s' }}/>)}
+        </div>
+        <Card>
+          {step===0 && <div className="fade-up">
+            <SLabel>Sobre ti</SLabel>
+            <div style={{ marginBottom:10 }}><Inp value={ob.name} onChange={e=>set({name:e.target.value})} placeholder="Tu nombre"/></div>
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:8, marginBottom:10 }}>
+              <Inp type="number" value={ob.weight} onChange={e=>set({weight:e.target.value})} placeholder="Peso kg"/>
+              <Inp type="number" value={ob.height} onChange={e=>set({height:e.target.value})} placeholder="Altura cm"/>
+              <Inp type="number" value={ob.age} onChange={e=>set({age:e.target.value})} placeholder="Edad"/>
+            </div>
+            <div style={{ display:'flex', gap:8 }}>
+              {['male','female'].map(s=>(
+                <button key={s} onClick={()=>set({sex:s})} style={{ flex:1, padding:11, border:`1.5px solid ${ob.sex===s?T.text:T.border}`, borderRadius:10, background:ob.sex===s?T.text:T.surface, color:ob.sex===s?'#fff':T.sub, cursor:'pointer', fontSize:13, fontWeight:600, transition:'all .15s' }}>{s==='male'?'Hombre':'Mujer'}</button>
+              ))}
+            </div>
+          </div>}
+          {step===1 && <div className="fade-up">
+            <SLabel>Actividad y objetivo</SLabel>
+            <div style={{ marginBottom:12 }}>
+              <select value={ob.activity} onChange={e=>set({activity:e.target.value})} style={{ background:T.bg, border:`1.5px solid ${T.border}`, borderRadius:10, color:T.text, padding:'11px 14px', fontSize:14, outline:'none', width:'100%' }}>
+                <option value="sedentario">Sedentario</option>
+                <option value="ligero">Ligero (1–3 días/sem)</option>
+                <option value="moderado">Moderado (3–5 días/sem)</option>
+                <option value="activo">Activo (6–7 días/sem)</option>
+                <option value="muy activo">Muy activo</option>
+              </select>
+            </div>
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
+              {Object.entries(OB_GOAL_META).map(([g,m])=>(
+                <button key={g} onClick={()=>set({goal:g})} style={{ padding:'13px 12px', border:`1.5px solid ${ob.goal===g?T.text:T.border}`, borderRadius:12, background:ob.goal===g?T.text:T.surface, cursor:'pointer', textAlign:'left', transition:'all .15s' }}>
+                  <div style={{ fontSize:16, marginBottom:4 }}>{m.icon}</div>
+                  <div style={{ fontSize:12, fontWeight:700, color:ob.goal===g?'#fff':T.text }}>{g}</div>
+                  <div style={{ fontSize:9, color:ob.goal===g?'rgba(255,255,255,.5)':T.muted, marginTop:2 }}>{m.sub}</div>
+                </button>
+              ))}
+            </div>
+          </div>}
+          {step===2 && results && <div className="fade-up">
+            <SLabel>Tu plan calculado</SLabel>
+            <div style={{ display:'flex', gap:8, marginBottom:12 }}>
+              {[{l:'kcal',v:results.target_cal,c:T.text,bg:T.bg},{l:'Prot',v:results.prot,c:T.prot,bg:T.protBg},{l:'Carbs',v:results.carbs,c:T.carbs,bg:T.carbsBg},{l:'Grasa',v:results.fat,c:T.fat,bg:T.fatBg}].map(m=>(
+                <div key={m.l} style={{ flex:1, background:m.bg, borderRadius:10, padding:'10px 6px', textAlign:'center' }}>
+                  <div style={{ fontSize:17, fontWeight:800, color:m.c, fontFamily:"'Syne',sans-serif" }}>{m.v}</div>
+                  <div style={{ fontSize:8, color:m.c, opacity:.7, textTransform:'uppercase', marginTop:2, fontWeight:700 }}>{m.l}</div>
+                </div>
+              ))}
+            </div>
+            <div style={{ fontSize:11, color:T.sub, lineHeight:1.7, background:T.bg, borderRadius:10, padding:'10px 14px' }}>{results.note}</div>
+            {err && <div style={{ marginTop:10, background:T.errBg, borderRadius:10, padding:'10px 14px', color:T.err, fontSize:12, fontWeight:600 }}>{err}</div>}
+          </div>}
+        </Card>
+        <div style={{ display:'flex', gap:8, marginTop:14 }}>
+          {step>0 && <BtnGhost onClick={()=>setStep(s=>s-1)} style={{ flexShrink:0 }}>Atrás</BtnGhost>}
+          {step<2 && <BtnPrimary onClick={()=>canNext&&setStep(s=>s+1)} style={{ opacity:canNext?1:.5, cursor:canNext?'pointer':'not-allowed' }}>Siguiente</BtnPrimary>}
+          {step===2 && <BtnPrimary onClick={finish} disabled={saving} style={{ opacity:saving?.6:1 }}>{saving?'Guardando…':'Comenzar a usar MACRO FIRE →'}</BtnPrimary>}
+        </div>
+        <div style={{ textAlign:'center', marginTop:16 }}>
+          <button onClick={onSkip} style={{ background:'none', border:'none', color:T.muted, cursor:'pointer', fontSize:12, textDecoration:'underline' }}>Omitir por ahora</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ─── MAIN APP ─────────────────────────────────────────────────────────────────
 export default function App() {
   const [session, setSession] = useState(null)
@@ -293,11 +403,12 @@ function MacroFireApp({ session }) {
   const [tab, setTab]             = useState('tracker')
   const [meals, setMeals]         = useState([])
   const [goals, setGoals]         = useState(null)
-  const [profile, setProfile]     = useState({ startWeight:'', targetWeight:'', startDate:'', name:'', height:'', age:'', sex:'male', activity:'moderado', goal:'Mantenimiento' })
+  const [profile, setProfile]     = useState({ start_weight:'', target_weight:'', start_date:'', name:'', height:'', age:'', sex:'male', activity:'moderado', goal:'Mantenimiento' })
   const [weightLog, setWeightLog] = useState([])
   const [historyData, setHistoryData] = useState([])
   const [showHistory, setShowHistory] = useState(false)
   const [dataLoading, setDataLoading] = useState(true)
+  const [showOnboarding, setShowOnboarding] = useState(false)
 
   // Tracker
   const [foodInput, setFoodInput] = useState('')
@@ -355,6 +466,8 @@ function MacroFireApp({ session }) {
         if (p) setProfile(prev => ({ ...prev, ...p }))
         if (w) setWeightLog(w)
         if (pl) setPlan(pl.plan_data)
+        const alreadyOnboarded = localStorage.getItem(`macrofire:onboarded:${userId}`)
+        if (!g && !p?.height && !alreadyOnboarded) setShowOnboarding(true)
       } catch (e) { console.error('Load error:', e) }
       setDataLoading(false)
     }
@@ -644,6 +757,21 @@ Escribe el JSON entre estos markers:
         <div style={{fontSize:13,color:T.muted}}>Cargando tus datos…</div>
       </div>
     </div>
+  )
+
+  if(showOnboarding) return (
+    <Onboarding
+      userId={userId}
+      onComplete={(savedProfile, savedGoals) => {
+        setProfile(prev=>({...prev, ...savedProfile}))
+        setGoals(savedGoals)
+        setShowOnboarding(false)
+      }}
+      onSkip={() => {
+        try { localStorage.setItem(`macrofire:onboarded:${userId}`, 'skipped') } catch {}
+        setShowOnboarding(false)
+      }}
+    />
   )
 
   const MEAL_TYPES = ['Desayuno','Almuerzo','Cena','Snack','Pre-entreno','Post-entreno']
@@ -1112,16 +1240,16 @@ Escribe el JSON entre estos markers:
             <Card style={{marginBottom:12}}>
               <SLabel>Perfil de seguimiento</SLabel>
               <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:10}}>
-                {[{l:'Peso inicial (kg)',k:'startWeight',p:'80'},{l:'Peso objetivo (kg)',k:'targetWeight',p:'70'},{l:'Fecha inicio',k:'startDate',p:'',type:'date'}].map(f=>(
+                {[{l:'Peso inicial (kg)',k:'start_weight',p:'80'},{l:'Peso objetivo (kg)',k:'target_weight',p:'70'},{l:'Fecha inicio',k:'start_date',p:'',type:'date'}].map(f=>(
                   <div key={f.k}><div style={{fontSize:11,fontWeight:600,color:T.sub,marginBottom:5}}>{f.l}</div><Inp type={f.type||'number'} value={profile[f.k]||''} onChange={e=>{const u={...profile,[f.k]:e.target.value};setProfile(u);upsertProfile(userId,u).catch(()=>{});}}/></div>
                 ))}
               </div>
-              {profile.startWeight&&profile.targetWeight&&(<div style={{marginTop:12,padding:'12px 14px',background:T.protBg,borderRadius:10}}>
+              {profile.start_weight&&profile.target_weight&&(<div style={{marginTop:12,padding:'12px 14px',background:T.protBg,borderRadius:10}}>
                 <div style={{fontSize:11,color:T.prot,fontWeight:600}}>
-                  Meta: {Math.abs(parseFloat(profile.targetWeight)-parseFloat(profile.startWeight)).toFixed(1)} kg {parseFloat(profile.targetWeight)<parseFloat(profile.startWeight)?'a perder':'a ganar'}
-                  {weightLog.length>0&&` · Actual: ${weightLog[0].weight} kg · Cambio: ${(weightLog[0].weight-parseFloat(profile.startWeight)).toFixed(1)} kg`}
+                  Meta: {Math.abs(parseFloat(profile.target_weight)-parseFloat(profile.start_weight)).toFixed(1)} kg {parseFloat(profile.target_weight)<parseFloat(profile.start_weight)?'a perder':'a ganar'}
+                  {weightLog.length>0&&` · Actual: ${weightLog[0].weight} kg · Cambio: ${(weightLog[0].weight-parseFloat(profile.start_weight)).toFixed(1)} kg`}
                 </div>
-                {weightLog.length>0&&<div style={{marginTop:6,height:4,background:'rgba(46,107,79,.2)',borderRadius:99,overflow:'hidden'}}><div style={{height:'100%',width:`${Math.min(Math.abs(weightLog[0].weight-parseFloat(profile.startWeight))/Math.abs(parseFloat(profile.targetWeight)-parseFloat(profile.startWeight))*100,100)}%`,background:T.prot,borderRadius:99,transition:'width .8s ease'}}/></div>}
+                {weightLog.length>0&&<div style={{marginTop:6,height:4,background:'rgba(46,107,79,.2)',borderRadius:99,overflow:'hidden'}}><div style={{height:'100%',width:`${Math.min(Math.abs(weightLog[0].weight-parseFloat(profile.start_weight))/Math.abs(parseFloat(profile.target_weight)-parseFloat(profile.start_weight))*100,100)}%`,background:T.prot,borderRadius:99,transition:'width .8s ease'}}/></div>}
               </div>)}
             </Card>
             <Card style={{marginBottom:12}}>
