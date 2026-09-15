@@ -76,6 +76,7 @@ export default async function handler(req) {
           generationConfig: {
             maxOutputTokens: max_tokens,
             temperature: 0.4,
+            thinkingConfig: { thinkingBudget: 0 },
           }
         })
       }
@@ -90,6 +91,13 @@ export default async function handler(req) {
     }
 
     const text = geminiData?.candidates?.[0]?.content?.parts?.[0]?.text || ''
+
+    if (!text) {
+      const finishReason = geminiData?.candidates?.[0]?.finishReason || 'desconocido'
+      return new Response(JSON.stringify({
+        error: { message: `Gemini no devolvió texto (finishReason: ${finishReason}). Intenta con menos texto o vuelve a intentar.` }
+      }), { status: 502, headers: corsHeaders })
+    }
 
     return new Response(JSON.stringify({
       content: [{ type: 'text', text }]
