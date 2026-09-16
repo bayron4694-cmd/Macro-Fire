@@ -501,6 +501,9 @@ function MacroFireApp({ session }) {
   const [adaptiveChecked, setAdaptiveChecked]       = useState(false)
   const [adaptiveApplying, setAdaptiveApplying]     = useState(false)
 
+  // Streak
+  const [streak, setStreak] = useState({ current:0, best:0 })
+
   const fileRef = useRef()
 
   // ── Load data from Supabase ────────────────────────────────────────────────
@@ -526,6 +529,24 @@ function MacroFireApp({ session }) {
     }
     load()
   }, [userId, today])
+
+  // ── Streak (días seguidos registrando) ─────────────────────────────────────
+  useEffect(() => {
+    const fmt = d => d.toISOString().split('T')[0]
+    const from = new Date(Date.now() - 60*86400000)
+    getMealsHistory(userId, fmt(from), today).then(rows => {
+      const loggedDays = new Set((rows||[]).map(r=>r.date))
+      let current = 0
+      const cursor = new Date()
+      if (!loggedDays.has(fmt(cursor))) cursor.setDate(cursor.getDate()-1) // hoy aún no cuenta como "roto"
+      while (loggedDays.has(fmt(cursor))) { current++; cursor.setDate(cursor.getDate()-1) }
+      let best = 0, run = 0
+      for (const d = new Date(from); d <= new Date(); d.setDate(d.getDate()+1)) {
+        if (loggedDays.has(fmt(d))) { run++; best = Math.max(best, run) } else run = 0
+      }
+      setStreak({ current, best: Math.max(best, current) })
+    }).catch(()=>{})
+  }, [userId, today, meals.length])
 
   // ── Totals ─────────────────────────────────────────────────────────────────
   const totals = meals.reduce((a,m)=>({
@@ -888,7 +909,11 @@ Escribe el JSON entre estos markers:
                 <div style={{fontSize:8,color:T.muted,letterSpacing:'0.16em',marginTop:1}}>TRACK · CALCULATE · ANALYZE</div>
               </div>
             </div>
-            <div style={{display:'flex',alignItems:'center',gap:10}}>
+            <div style={{display:'flex',alignItems:'center',gap:8}}>
+              {streak.current>0 && <div title={streak.best>streak.current?`Récord: ${streak.best} días`:''} style={{background:'#FFF4E8',borderRadius:8,padding:'4px 9px',textAlign:'center',display:'flex',alignItems:'center',gap:3}}>
+                <span style={{fontSize:13}}>🔥</span>
+                <span style={{fontSize:12,color:'#B35C1E',fontWeight:800}}>{streak.current}</span>
+              </div>}
               {goals && <div style={{background:T.protBg,borderRadius:8,padding:'4px 10px',textAlign:'right'}}>
                 <div style={{fontSize:11,color:T.prot,fontWeight:700}}>{goals.target_cal} kcal</div>
                 <div style={{fontSize:8,color:T.prot,opacity:.6}}>{goals.cal_fixed<0?'–300 déficit':goals.cal_fixed>0?'+300 superávit':'Mantenimiento'}</div>
@@ -914,7 +939,10 @@ Escribe el JSON entre estos markers:
             <Card style={{marginBottom:12}}>
               <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:16}}>
                 <div>
-                  <SLabel>Hoy · {new Date().toLocaleDateString('es-ES',{weekday:'long',day:'numeric',month:'short'})}</SLabel>
+                  <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:2}}>
+                    <SLabel>Hoy · {new Date().toLocaleDateString('es-ES',{weekday:'long',day:'numeric',month:'short'})}</SLabel>
+                    {streak.current>0&&<span style={{fontSize:10,fontWeight:800,color:'#B35C1E',background:'#FFF4E8',borderRadius:20,padding:'1px 8px',display:'inline-flex',alignItems:'center',gap:3,marginBottom:9}}>🔥 {streak.current} día{streak.current!==1?'s':''}{streak.best>streak.current?` · récord ${streak.best}`:''}</span>}
+                  </div>
                   <div style={{display:'flex',alignItems:'baseline',gap:6}}>
                     <span style={{fontSize:52,fontWeight:700,fontFamily:"'Syne',sans-serif",letterSpacing:'-2px',lineHeight:1}}>{Math.round(totals.cal)}</span>
                     <span style={{fontSize:14,color:T.muted}}>kcal</span>
