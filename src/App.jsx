@@ -153,6 +153,45 @@ const GOAL_PRESETS = {
   "Rendimiento":       { protGkg:2.0, carbGkg:5.0, fatGkg:0.9, calFixed:300,  protRange:"1.8–2.2 g/kg", carbRange:"4–6 g/kg", fatRange:"0.8–1 g/kg", dist:"Prot ~22% · Carbs ~52% · Grasas ~18%", note:"Superávit de 300 kcal. Prioriza glucógeno para rendimiento." },
 }
 
+// ─── ADAPTIVE GOAL ADJUSTMENT ─────────────────────────────────────────────────
+// Re-estima el TDEE real del usuario a partir de su peso real vs. lo que comió
+// (mismo principio que MacroFactor/RP Diet): 1kg de grasa ≈ 7700 kcal.
+const KCAL_PER_KG = 7700
+const computeAdaptiveSuggestion = (weightLog, mealHistory, goals) => {
+  if (!goals || !weightLog || weightLog.length < 2) return null
+  const sorted = [...weightLog].sort((a,b)=> new Date(a.created_at) - new Date(b.created_at))
+  const newest = sorted[sorted.length-1]
+  const newestTime = new Date(newest.created_at).getTime()
+  const oldest = [...sorted].reverse().find(e => {
+    const days = (newestTime - new Date(e.created_at).getTime()) / 86400000
+    return days >= 5 && days <= 14
+  })
+  if (!oldest) return null
+  const days = (newestTime - new Date(oldest.created_at).getTime()) / 86400000
+  const weightChangeKg = newest.weight - oldest.weight
+
+  const byDate = {}
+  for (const m of mealHistory||[]) byDate[m.date] = (byDate[m.date]||0) + (m.cal||0)
+  const loggedDays = Object.keys(byDate)
+  if (loggedDays.length < 4) return null
+
+  const avgDailyCal = loggedDays.reduce((s,d)=>s+byDate[d],0) / loggedDays.length
+  const estimatedTDEE = avgDailyCal - (weightChangeKg * KCAL_PER_KG / days)
+  const newTargetCal = Math.round(estimatedTDEE + (goals.cal_fixed||0))
+  if (!isFinite(newTargetCal) || Math.abs(newTargetCal - goals.target_cal) < 80) return null
+
+  const newCarbs = Math.max(0, Math.round((newTargetCal - goals.prot*4 - goals.fat*9) / 4))
+  return {
+    newTargetCal, newCarbs,
+    estimatedTDEE: Math.round(estimatedTDEE),
+    currentTargetCal: goals.target_cal,
+    loggedDays: loggedDays.length,
+    days: Math.round(days),
+    weightChangeKg: Math.round(weightChangeKg*10)/10,
+    direction: newTargetCal < goals.target_cal ? 'down' : 'up',
+  }
+}
+
 // ─── THEME ────────────────────────────────────────────────────────────────────
 const T = {
   bg:"#FAFAF8", surface:"#FFFFFF", border:"#EBEBE6", borderHi:"#D4D4CC",
@@ -447,6 +486,9 @@ function MacroFireApp({ session }) {
   // Progress
   const [weightInput, setWeightInput] = useState('')
   const [weightNote, setWeightNote]   = useState('')
+  const [adaptiveSuggestion, setAdaptiveSuggestion] = useState(null)
+  const [adaptiveChecked, setAdaptiveChecked]       = useState(false)
+  const [adaptiveApplying, setAdaptiveApplying]     = useState(false)
 
   const fileRef = useRef()
 
@@ -735,7 +777,48 @@ Escribe el JSON entre estos markers:
       const entry = await addWeight(userId, parseFloat(weightInput), weightNote)
       setWeightLog(p=>[entry,...p])
       setWeightInput(''); setWeightNote('')
+      setAdaptiveChecked(false)
     } catch(e){ console.error(e) }
+  }
+
+  // ── Adaptive goal adjustment ───────────────────────────────────────────────
+  const adaptiveDismissKey = `macrofire:adaptiveDismissed:${userId}`
+  useEffect(() => {
+    if (tab !== 'progress' || adaptiveChecked || !goals || weightLog.length < 2) return
+    setAdaptiveChecked(true)
+    const sorted = [...weightLog].sort((a,b)=> new Date(a.created_at) - new Date(b.created_at))
+    const newest = sorted[sorted.length-1]
+    const newestTime = new Date(newest.created_at).getTime()
+    const oldest = [...sorted].reverse().find(e => {
+      const d = (newestTime - new Date(e.created_at).getTime()) / 86400000
+      return d >= 5 && d <= 14
+    })
+    if (!oldest) return
+    try {
+      const dismissedAt = localStorage.getItem(adaptiveDismissKey)
+      if (dismissedAt && Date.now() - Number(dismissedAt) < 7*86400000) return
+    } catch {}
+    const fromDate = new Date(oldest.created_at).toISOString().split('T')[0]
+    const toDate = new Date().toISOString().split('T')[0]
+    getMealsHistory(userId, fromDate, toDate)
+      .then(history => setAdaptiveSuggestion(computeAdaptiveSuggestion(weightLog, history, goals)))
+      .catch(()=>{})
+  }, [tab, goals, weightLog, adaptiveChecked])
+
+  const applyAdaptiveSuggestion = async () => {
+    if (!adaptiveSuggestion) return
+    setAdaptiveApplying(true)
+    try {
+      const updated = await upsertGoals(userId, { ...goals, target_cal:adaptiveSuggestion.newTargetCal, carbs:adaptiveSuggestion.newCarbs })
+      setGoals(updated)
+      setAdaptiveSuggestion(null)
+    } catch(e){ console.error(e) }
+    setAdaptiveApplying(false)
+  }
+
+  const dismissAdaptiveSuggestion = () => {
+    try { localStorage.setItem(adaptiveDismissKey, String(Date.now())) } catch {}
+    setAdaptiveSuggestion(null)
   }
 
   // ── Download PDF ───────────────────────────────────────────────────────────
@@ -1237,6 +1320,21 @@ Escribe el JSON entre estos markers:
               <div style={{fontSize:26,fontFamily:"'Syne',sans-serif",fontWeight:800,letterSpacing:'-0.5px'}}>Progreso</div>
               <div style={{fontSize:13,color:T.muted,marginTop:4}}>Seguimiento de peso y métricas</div>
             </div>
+            {adaptiveSuggestion&&(
+              <Card style={{marginBottom:12,background:T.blueBg,borderColor:T.blue+'33'}}>
+                <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:10}}>
+                  <span style={{fontSize:16}}>🧠</span>
+                  <SLabel>Auto-ajuste inteligente disponible</SLabel>
+                </div>
+                <div style={{fontSize:12,color:'#334',lineHeight:1.7,marginBottom:12}}>
+                  En los últimos {adaptiveSuggestion.days} días registraste {adaptiveSuggestion.loggedDays} días de comidas y tu peso {adaptiveSuggestion.weightChangeKg<0?'bajó':'subió'} {Math.abs(adaptiveSuggestion.weightChangeKg)}kg. Según eso, tu metabolismo real parece ser de <b>~{adaptiveSuggestion.estimatedTDEE} kcal</b>, distinto a lo calculado inicialmente. Te sugerimos {adaptiveSuggestion.direction==='down'?'bajar':'subir'} tu meta diaria de {adaptiveSuggestion.currentTargetCal} a <b>{adaptiveSuggestion.newTargetCal} kcal</b> para seguir alineado con tu objetivo.
+                </div>
+                <div style={{display:'flex',gap:8}}>
+                  <BtnPrimary onClick={applyAdaptiveSuggestion} disabled={adaptiveApplying} style={{flex:1,background:T.blue,opacity:adaptiveApplying?.6:1}}>{adaptiveApplying?'Aplicando…':'Aplicar ajuste'}</BtnPrimary>
+                  <BtnGhost onClick={dismissAdaptiveSuggestion}>Ignorar</BtnGhost>
+                </div>
+              </Card>
+            )}
             <Card style={{marginBottom:12}}>
               <SLabel>Perfil de seguimiento</SLabel>
               <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:10}}>
