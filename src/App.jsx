@@ -146,6 +146,17 @@ const FOOD_DB = {
   "pistachos":             { cal:560, prot:20,  carbs:28,   fat:45,   fiber:10  },
 }
 
+// Grasas/extras que la IA de foto casi siempre subestima o no ve (aceite absorbido,
+// mantequilla derretida, aderezos): confirmarlos a mano evita el error de ~250-345 kcal
+// que muestran los estudios de precisión de apps de foto con IA.
+const HIDDEN_ADDITIONS = [
+  { label:'🫒 Aceite para cocinar', tag:'aceite para cocinar (aprox 1-2 cditas)' },
+  { label:'🧈 Mantequilla', tag:'mantequilla añadida' },
+  { label:'🥫 Salsa/Aderezo', tag:'salsa o aderezo añadido' },
+  { label:'🧀 Queso extra', tag:'queso extra además del plato principal' },
+  { label:'🍯 Azúcar/Miel', tag:'azúcar o miel añadida' },
+]
+
 const GOAL_PRESETS = {
   "Pérdida de Grasa":  { protGkg:2.2, carbGkg:3.0, fatGkg:0.8, calFixed:-300, protRange:"2.0–2.4 g/kg", carbRange:"2–4 g/kg", fatRange:"0.6–1 g/kg", dist:"Prot ~35% · Carbs ~30% · Grasas ~20%", note:"Déficit de 300 kcal. Alta proteína preserva la masa muscular." },
   "Mantenimiento":     { protGkg:1.8, carbGkg:4.0, fatGkg:1.0, calFixed:0,    protRange:"1.6–2.0 g/kg", carbRange:"3–5 g/kg", fatRange:"0.8–1.2 g/kg", dist:"Prot ~25% · Carbs ~45% · Grasas ~25%", note:"Calorías de mantenimiento. Ideal para recomposición corporal." },
@@ -662,7 +673,7 @@ function MacroFireApp({ session }) {
       setAiProg(2)
       const hasIng = tags.length>0
       const prompt = `Eres nutricionista deportivo experto en análisis visual. Analiza esta imagen de comida con máxima precisión.
-${hasIng?`\nINGREDIENTES CONFIRMADOS: ${tags.join(', ')}. Solo estima pesos.\n`:''}
+${hasIng?`\nINGREDIENTES CONFIRMADOS POR EL USUARIO (obligatorio incluirlos en el cálculo, aunque no se vean en la foto): ${tags.join(', ')}. Estos SÍ están presentes; estima gramos realistas para cada uno y suma sus calorías y grasa al total — no los omitas ni los subestimes.\n`:''}
 PASO 1 — Identifica alimentos, método de cocción, textura.
 PASO 2 — Usa referencias de escala (plato≈26cm, tenedor≈19cm).
 PASO 3 — Convierte a gramos (pollo cocido 0.95g/ml, arroz cocido 0.85g/ml, verdura 0.62g/ml, huevo=55g c/u, aceite cdita=4g).
@@ -1144,6 +1155,17 @@ Escribe el JSON entre estos markers:
                   <div style={{display:'flex',gap:10,alignItems:'flex-start',marginBottom:10}}>
                     <div style={{width:32,height:32,borderRadius:8,background:T.carbsBg,display:'flex',alignItems:'center',justifyContent:'center',fontSize:14,flexShrink:0}}>🎯</div>
                     <div><div style={{fontSize:13,fontWeight:700}}>Ingredientes confirmados</div><div style={{fontSize:11,color:T.muted,marginTop:1}}>Opcional · Mejora precisión hasta 40%</div></div>
+                  </div>
+                  <div style={{marginBottom:10}}>
+                    <div style={{fontSize:11,fontWeight:600,color:T.sub,marginBottom:6}}>¿Le pusiste algo de esto? La IA no siempre lo ve, y es lo que más se subestima:</div>
+                    <div style={{display:'flex',flexWrap:'wrap',gap:6}}>
+                      {HIDDEN_ADDITIONS.map(h=>{
+                        const active = tags.includes(h.tag)
+                        return (
+                          <button key={h.tag} onClick={()=>setTags(p=> active ? p.filter(t=>t!==h.tag) : [...p,h.tag])} style={{padding:'6px 11px',border:`1.5px solid ${active?T.prot:T.border}`,borderRadius:20,background:active?T.protBg:T.surface,color:active?T.prot:T.sub,cursor:'pointer',fontSize:11,fontWeight:600,transition:'all .15s'}}>{h.label}</button>
+                        )
+                      })}
+                    </div>
                   </div>
                   {tags.length>0&&<div style={{display:'flex',flexWrap:'wrap',gap:5,marginBottom:10}}>{tags.map((t,i)=><span key={i} style={{display:'inline-flex',alignItems:'center',gap:4,background:T.surface,border:`1px solid ${T.border}`,borderRadius:6,padding:'4px 10px 4px 12px',fontSize:12,fontWeight:600}}>{t}<button onClick={()=>setTags(p=>p.filter((_,j)=>j!==i))} style={{background:'none',border:'none',color:T.muted,cursor:'pointer',fontSize:14}}>×</button></span>)}</div>}
                   <div style={{display:'flex',gap:8}}>
