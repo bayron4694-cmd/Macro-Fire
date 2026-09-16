@@ -309,6 +309,66 @@ const DayCard = ({ dia }) => {
   )
 }
 
+// ─── BARCODE SCANNER ──────────────────────────────────────────────────────────
+// Usa la BarcodeDetector nativa del navegador (sin dependencias extra) para no
+// inflar el bundle. Soportado en Chrome/Edge (Android y desktop); en navegadores
+// sin soporte (ej. Safari) se muestra un mensaje claro en vez de fallar en silencio.
+const BarcodeScanner = ({ onDetected, onClose }) => {
+  const videoRef = useRef()
+  const [error, setError] = useState(null)
+
+  useEffect(() => {
+    let stream, raf, stopped = false
+    const start = async () => {
+      if (!('BarcodeDetector' in window)) { setError('unsupported'); return }
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
+        if (stopped) { stream.getTracks().forEach(t=>t.stop()); return }
+        videoRef.current.srcObject = stream
+        await videoRef.current.play()
+        const detector = new window.BarcodeDetector({ formats: ['ean_13','ean_8','upc_a','upc_e'] })
+        const tick = async () => {
+          if (stopped) return
+          try {
+            const codes = await detector.detect(videoRef.current)
+            if (codes.length>0) { onDetected(codes[0].rawValue); return }
+          } catch {}
+          raf = requestAnimationFrame(tick)
+        }
+        raf = requestAnimationFrame(tick)
+      } catch {
+        setError('camera')
+      }
+    }
+    start()
+    return () => {
+      stopped = true
+      if (raf) cancelAnimationFrame(raf)
+      if (stream) stream.getTracks().forEach(t=>t.stop())
+    }
+  }, [])
+
+  return (
+    <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,.92)', zIndex:200, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:20 }}>
+      <button onClick={onClose} style={{ position:'absolute', top:16, right:16, background:'rgba(255,255,255,.15)', border:'none', borderRadius:20, color:'#fff', width:36, height:36, fontSize:18, cursor:'pointer' }}>×</button>
+      {error==='unsupported' && <div style={{ color:'#fff', textAlign:'center', maxWidth:280 }}>
+        <div style={{ fontSize:32, marginBottom:12 }}>📵</div>
+        <div style={{ fontSize:14, fontWeight:600, marginBottom:6 }}>Tu navegador no soporta escaneo de códigos</div>
+        <div style={{ fontSize:12, opacity:.7 }}>Prueba con Chrome en Android, o busca el alimento manualmente.</div>
+      </div>}
+      {error==='camera' && <div style={{ color:'#fff', textAlign:'center', maxWidth:280 }}>
+        <div style={{ fontSize:32, marginBottom:12 }}>🚫</div>
+        <div style={{ fontSize:14, fontWeight:600 }}>No se pudo acceder a la cámara</div>
+        <div style={{ fontSize:12, opacity:.7, marginTop:6 }}>Revisa los permisos de cámara del navegador.</div>
+      </div>}
+      {!error && <>
+        <video ref={videoRef} playsInline muted style={{ width:'100%', maxWidth:340, borderRadius:16, background:'#000' }}/>
+        <div style={{ color:'#fff', fontSize:13, marginTop:16, fontWeight:600 }}>Apunta al código de barras del producto</div>
+      </>}
+    </div>
+  )
+}
+
 // ─── ONBOARDING ───────────────────────────────────────────────────────────────
 const OB_ACT_MAP = { sedentario:1.2, ligero:1.375, moderado:1.55, activo:1.725, 'muy activo':1.9 }
 const OB_GOAL_META = { 'Pérdida de Grasa':{icon:'↓',sub:'Déficit de 300 kcal'}, 'Mantenimiento':{icon:'⟷',sub:'Calorías de mantenimiento'}, 'Ganancia Muscular':{icon:'↑',sub:'Superávit de 300 kcal'}, 'Rendimiento':{icon:'⚡',sub:'Enfocado en rendimiento'} }
@@ -469,6 +529,8 @@ function MacroFireApp({ session }) {
   const [recentFoods, setRecentFoods] = useState(() => {
     try { return JSON.parse(localStorage.getItem(recentsKey)) || [] } catch { return [] }
   })
+  const [showScanner, setShowScanner] = useState(false)
+  const [scanState, setScanState]     = useState(null)
 
   // Calculator
   const [calc, setCalc]     = useState({ weight:'', height:'', age:'', sex:'male', activity:'1.55', goal:'Mantenimiento' })
@@ -586,6 +648,32 @@ function MacroFireApp({ session }) {
 
   const handleClearMeals = async () => {
     try { await clearMeals(userId, today); setMeals([]) } catch(e){ console.error(e) }
+  }
+
+  // ── Barcode scanner (OpenFoodFacts) ─────────────────────────────────────────
+  const handleBarcodeDetected = async (code) => {
+    setShowScanner(false)
+    setScanState({ status:'looking-up' })
+    try {
+      const resp = await fetch(`https://world.openfoodfacts.org/api/v2/product/${code}.json?fields=product_name,brands,nutriments`)
+      const data = await resp.json()
+      if (data.status!==1 || !data.product) { setScanState({ status:'not-found' }); return }
+      const n = data.product.nutriments || {}
+      const cal = n['energy-kcal_100g'] ?? 0, prot = n['proteins_100g'] ?? 0, carbs = n['carbohydrates_100g'] ?? 0, fat = n['fat_100g'] ?? 0, fiber = n['fiber_100g'] ?? 0
+      if (!cal && !prot && !carbs && !fat) { setScanState({ status:'not-found' }); return }
+      setScanState({ status:'found', grams:100, product:{ name: data.product.product_name || data.product.brands || 'Producto escaneado', cal, prot, carbs, fat, fiber } })
+    } catch { setScanState({ status:'error' }) }
+  }
+
+  const addScannedProduct = async () => {
+    if (scanState?.status!=='found') return
+    const { product } = scanState, g = parseFloat(scanState.grams)||100, r = g/100
+    const meal = { name:product.name, grams:g, cal:Math.round(product.cal*r*10)/10, prot:Math.round(product.prot*r*10)/10, carbs:Math.round(product.carbs*r*10)/10, fat:Math.round(product.fat*r*10)/10, fiber:Math.round((product.fiber||0)*r*10)/10, meal_type:mealType }
+    try {
+      const saved = await addMeal(userId, meal, today)
+      setMeals(p=>[...p, saved])
+    } catch(e){ console.error(e) }
+    setScanState(null)
   }
 
   const loadHistory = async () => {
@@ -898,6 +986,7 @@ Escribe el JSON entre estos markers:
 
   return (
     <div style={{minHeight:'100vh',background:T.bg,color:T.text,fontFamily:"'DM Sans',sans-serif"}}>
+      {showScanner && <BarcodeScanner onDetected={handleBarcodeDetected} onClose={()=>setShowScanner(false)}/>}
       {/* HEADER */}
       <header style={{background:T.surface,borderBottom:`1px solid ${T.border}`,position:'sticky',top:0,zIndex:50}}>
         <div style={{maxWidth:540,margin:'0 auto',padding:'0 16px'}}>
@@ -990,16 +1079,19 @@ Escribe el JSON entre estos markers:
                   </div>
                 </div>
               )}
-              <div style={{position:'relative',marginBottom:10}}>
-                <Inp value={foodInput} onChange={e=>onFoodChange(e.target.value)} onKeyDown={e=>e.key==='Enter'&&handleAddFood()} placeholder="Busca un alimento…"/>
-                {sugg.length>0&&<div style={{position:'absolute',top:'calc(100% + 4px)',left:0,right:0,background:T.surface,border:`1px solid ${T.border}`,borderRadius:12,zIndex:100,overflow:'hidden',boxShadow:'0 8px 24px rgba(0,0,0,0.1)'}}>
-                  {sugg.map(s=>(
-                    <div key={s} onClick={()=>{setFoodInput(s);setSugg([]);}} style={{padding:'10px 16px',cursor:'pointer',fontSize:13,color:T.sub,borderBottom:`1px solid ${T.border}`,display:'flex',justifyContent:'space-between'}}>
-                      <span style={{fontWeight:500}}>{s}</span>
-                      <span style={{fontSize:11,color:T.muted}}>{FOOD_DB[s]?.cal} kcal/100g</span>
-                    </div>
-                  ))}
-                </div>}
+              <div style={{display:'flex',gap:8,marginBottom:10}}>
+                <div style={{position:'relative',flex:1}}>
+                  <Inp value={foodInput} onChange={e=>onFoodChange(e.target.value)} onKeyDown={e=>e.key==='Enter'&&handleAddFood()} placeholder="Busca un alimento…"/>
+                  {sugg.length>0&&<div style={{position:'absolute',top:'calc(100% + 4px)',left:0,right:0,background:T.surface,border:`1px solid ${T.border}`,borderRadius:12,zIndex:100,overflow:'hidden',boxShadow:'0 8px 24px rgba(0,0,0,0.1)'}}>
+                    {sugg.map(s=>(
+                      <div key={s} onClick={()=>{setFoodInput(s);setSugg([]);}} style={{padding:'10px 16px',cursor:'pointer',fontSize:13,color:T.sub,borderBottom:`1px solid ${T.border}`,display:'flex',justifyContent:'space-between'}}>
+                        <span style={{fontWeight:500}}>{s}</span>
+                        <span style={{fontSize:11,color:T.muted}}>{FOOD_DB[s]?.cal} kcal/100g</span>
+                      </div>
+                    ))}
+                  </div>}
+                </div>
+                <BtnGhost onClick={()=>{setScanState(null);setShowScanner(true)}} style={{flexShrink:0,padding:'11px 14px'}} title="Escanear código de barras">📷</BtnGhost>
               </div>
               <div style={{display:'flex',gap:8}}>
                 <Inp value={grams} onChange={e=>setGrams(e.target.value)} placeholder="Gramos (default 100)" type="number" style={{flex:1}}/>
@@ -1014,6 +1106,37 @@ Escribe el JSON entre estos markers:
                 </div>
               )}
             </Card>
+
+            {scanState&&(
+              <Card style={{marginBottom:12}}>
+                {scanState.status==='looking-up'&&<div style={{textAlign:'center',padding:'8px 0'}}><div style={{fontSize:13,color:T.sub,fontWeight:600}}>Buscando producto…</div></div>}
+                {scanState.status==='not-found'&&<div style={{textAlign:'center',padding:'8px 0'}}>
+                  <div style={{fontSize:13,color:T.err,fontWeight:600,marginBottom:8}}>Producto no encontrado en la base de datos</div>
+                  <BtnGhost onClick={()=>setScanState(null)}>Cerrar</BtnGhost>
+                </div>}
+                {scanState.status==='error'&&<div style={{textAlign:'center',padding:'8px 0'}}>
+                  <div style={{fontSize:13,color:T.err,fontWeight:600,marginBottom:8}}>Error al buscar el producto. Intenta de nuevo.</div>
+                  <BtnGhost onClick={()=>setScanState(null)}>Cerrar</BtnGhost>
+                </div>}
+                {scanState.status==='found'&&<div className="fade-up">
+                  <SLabel>Producto escaneado</SLabel>
+                  <div style={{fontSize:14,fontWeight:700,marginBottom:10}}>{scanState.product.name}</div>
+                  <div style={{display:'flex',gap:8,marginBottom:10}}>
+                    <Inp type="number" value={scanState.grams} onChange={e=>setScanState(p=>({...p,grams:e.target.value}))} placeholder="Gramos" style={{flex:1}}/>
+                  </div>
+                  <div style={{background:T.protBg,borderRadius:8,padding:'8px 12px',fontSize:11,color:T.prot,fontWeight:600,display:'flex',gap:10,flexWrap:'wrap',marginBottom:12}}>
+                    <span>{Math.round(scanState.product.cal*(parseFloat(scanState.grams)||100)/100)} kcal</span>
+                    <span>P {Math.round(scanState.product.prot*(parseFloat(scanState.grams)||100)/100*10)/10}g</span>
+                    <span>C {Math.round(scanState.product.carbs*(parseFloat(scanState.grams)||100)/100*10)/10}g</span>
+                    <span>G {Math.round(scanState.product.fat*(parseFloat(scanState.grams)||100)/100*10)/10}g</span>
+                  </div>
+                  <div style={{display:'flex',gap:8}}>
+                    <BtnPrimary onClick={addScannedProduct} style={{flex:1}}>+ Agregar al registro</BtnPrimary>
+                    <BtnGhost onClick={()=>setScanState(null)}>Cancelar</BtnGhost>
+                  </div>
+                </div>}
+              </Card>
+            )}
 
             {meals.length>0?(
               <Card>
