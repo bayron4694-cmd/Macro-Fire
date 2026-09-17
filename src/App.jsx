@@ -146,6 +146,17 @@ const FOOD_DB = {
   "pistachos":             { cal:560, prot:20,  carbs:28,   fat:45,   fiber:10  },
 }
 
+// Grasas/extras que la IA de foto casi siempre subestima o no ve (aceite absorbido,
+// mantequilla derretida, aderezos): confirmarlos a mano evita el error de ~250-345 kcal
+// que muestran los estudios de precisión de apps de foto con IA.
+const HIDDEN_ADDITIONS = [
+  { label:'🫒 Aceite para cocinar', tag:'aceite para cocinar (aprox 1-2 cditas)' },
+  { label:'🧈 Mantequilla', tag:'mantequilla añadida' },
+  { label:'🥫 Salsa/Aderezo', tag:'salsa o aderezo añadido' },
+  { label:'🧀 Queso extra', tag:'queso extra además del plato principal' },
+  { label:'🍯 Azúcar/Miel', tag:'azúcar o miel añadida' },
+]
+
 const GOAL_PRESETS = {
   "Pérdida de Grasa":  { protGkg:2.2, carbGkg:3.0, fatGkg:0.8, calFixed:-300, protRange:"2.0–2.4 g/kg", carbRange:"2–4 g/kg", fatRange:"0.6–1 g/kg", dist:"Prot ~35% · Carbs ~30% · Grasas ~20%", note:"Déficit de 300 kcal. Alta proteína preserva la masa muscular." },
   "Mantenimiento":     { protGkg:1.8, carbGkg:4.0, fatGkg:1.0, calFixed:0,    protRange:"1.6–2.0 g/kg", carbRange:"3–5 g/kg", fatRange:"0.8–1.2 g/kg", dist:"Prot ~25% · Carbs ~45% · Grasas ~25%", note:"Calorías de mantenimiento. Ideal para recomposición corporal." },
@@ -294,6 +305,66 @@ const DayCard = ({ dia }) => {
           ))}
         </div>
       )}
+    </div>
+  )
+}
+
+// ─── BARCODE SCANNER ──────────────────────────────────────────────────────────
+// Usa la BarcodeDetector nativa del navegador (sin dependencias extra) para no
+// inflar el bundle. Soportado en Chrome/Edge (Android y desktop); en navegadores
+// sin soporte (ej. Safari) se muestra un mensaje claro en vez de fallar en silencio.
+const BarcodeScanner = ({ onDetected, onClose }) => {
+  const videoRef = useRef()
+  const [error, setError] = useState(null)
+
+  useEffect(() => {
+    let stream, raf, stopped = false
+    const start = async () => {
+      if (!('BarcodeDetector' in window)) { setError('unsupported'); return }
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
+        if (stopped) { stream.getTracks().forEach(t=>t.stop()); return }
+        videoRef.current.srcObject = stream
+        await videoRef.current.play()
+        const detector = new window.BarcodeDetector({ formats: ['ean_13','ean_8','upc_a','upc_e'] })
+        const tick = async () => {
+          if (stopped) return
+          try {
+            const codes = await detector.detect(videoRef.current)
+            if (codes.length>0) { onDetected(codes[0].rawValue); return }
+          } catch {}
+          raf = requestAnimationFrame(tick)
+        }
+        raf = requestAnimationFrame(tick)
+      } catch {
+        setError('camera')
+      }
+    }
+    start()
+    return () => {
+      stopped = true
+      if (raf) cancelAnimationFrame(raf)
+      if (stream) stream.getTracks().forEach(t=>t.stop())
+    }
+  }, [])
+
+  return (
+    <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,.92)', zIndex:200, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:20 }}>
+      <button onClick={onClose} style={{ position:'absolute', top:16, right:16, background:'rgba(255,255,255,.15)', border:'none', borderRadius:20, color:'#fff', width:36, height:36, fontSize:18, cursor:'pointer' }}>×</button>
+      {error==='unsupported' && <div style={{ color:'#fff', textAlign:'center', maxWidth:280 }}>
+        <div style={{ fontSize:32, marginBottom:12 }}>📵</div>
+        <div style={{ fontSize:14, fontWeight:600, marginBottom:6 }}>Tu navegador no soporta escaneo de códigos</div>
+        <div style={{ fontSize:12, opacity:.7 }}>Prueba con Chrome en Android, o busca el alimento manualmente.</div>
+      </div>}
+      {error==='camera' && <div style={{ color:'#fff', textAlign:'center', maxWidth:280 }}>
+        <div style={{ fontSize:32, marginBottom:12 }}>🚫</div>
+        <div style={{ fontSize:14, fontWeight:600 }}>No se pudo acceder a la cámara</div>
+        <div style={{ fontSize:12, opacity:.7, marginTop:6 }}>Revisa los permisos de cámara del navegador.</div>
+      </div>}
+      {!error && <>
+        <video ref={videoRef} playsInline muted style={{ width:'100%', maxWidth:340, borderRadius:16, background:'#000' }}/>
+        <div style={{ color:'#fff', fontSize:13, marginTop:16, fontWeight:600 }}>Apunta al código de barras del producto</div>
+      </>}
     </div>
   )
 }
@@ -458,6 +529,8 @@ function MacroFireApp({ session }) {
   const [recentFoods, setRecentFoods] = useState(() => {
     try { return JSON.parse(localStorage.getItem(recentsKey)) || [] } catch { return [] }
   })
+  const [showScanner, setShowScanner] = useState(false)
+  const [scanState, setScanState]     = useState(null)
 
   // Calculator
   const [calc, setCalc]     = useState({ weight:'', height:'', age:'', sex:'male', activity:'1.55', goal:'Mantenimiento' })
@@ -490,6 +563,9 @@ function MacroFireApp({ session }) {
   const [adaptiveChecked, setAdaptiveChecked]       = useState(false)
   const [adaptiveApplying, setAdaptiveApplying]     = useState(false)
 
+  // Streak
+  const [streak, setStreak] = useState({ current:0, best:0 })
+
   const fileRef = useRef()
 
   // ── Load data from Supabase ────────────────────────────────────────────────
@@ -515,6 +591,24 @@ function MacroFireApp({ session }) {
     }
     load()
   }, [userId, today])
+
+  // ── Streak (días seguidos registrando) ─────────────────────────────────────
+  useEffect(() => {
+    const fmt = d => d.toISOString().split('T')[0]
+    const from = new Date(Date.now() - 60*86400000)
+    getMealsHistory(userId, fmt(from), today).then(rows => {
+      const loggedDays = new Set((rows||[]).map(r=>r.date))
+      let current = 0
+      const cursor = new Date()
+      if (!loggedDays.has(fmt(cursor))) cursor.setDate(cursor.getDate()-1) // hoy aún no cuenta como "roto"
+      while (loggedDays.has(fmt(cursor))) { current++; cursor.setDate(cursor.getDate()-1) }
+      let best = 0, run = 0
+      for (const d = new Date(from); d <= new Date(); d.setDate(d.getDate()+1)) {
+        if (loggedDays.has(fmt(d))) { run++; best = Math.max(best, run) } else run = 0
+      }
+      setStreak({ current, best: Math.max(best, current) })
+    }).catch(()=>{})
+  }, [userId, today, meals.length])
 
   // ── Totals ─────────────────────────────────────────────────────────────────
   const totals = meals.reduce((a,m)=>({
@@ -554,6 +648,32 @@ function MacroFireApp({ session }) {
 
   const handleClearMeals = async () => {
     try { await clearMeals(userId, today); setMeals([]) } catch(e){ console.error(e) }
+  }
+
+  // ── Barcode scanner (OpenFoodFacts) ─────────────────────────────────────────
+  const handleBarcodeDetected = async (code) => {
+    setShowScanner(false)
+    setScanState({ status:'looking-up' })
+    try {
+      const resp = await fetch(`https://world.openfoodfacts.org/api/v2/product/${code}.json?fields=product_name,brands,nutriments`)
+      const data = await resp.json()
+      if (data.status!==1 || !data.product) { setScanState({ status:'not-found' }); return }
+      const n = data.product.nutriments || {}
+      const cal = n['energy-kcal_100g'] ?? 0, prot = n['proteins_100g'] ?? 0, carbs = n['carbohydrates_100g'] ?? 0, fat = n['fat_100g'] ?? 0, fiber = n['fiber_100g'] ?? 0
+      if (!cal && !prot && !carbs && !fat) { setScanState({ status:'not-found' }); return }
+      setScanState({ status:'found', grams:100, product:{ name: data.product.product_name || data.product.brands || 'Producto escaneado', cal, prot, carbs, fat, fiber } })
+    } catch { setScanState({ status:'error' }) }
+  }
+
+  const addScannedProduct = async () => {
+    if (scanState?.status!=='found') return
+    const { product } = scanState, g = parseFloat(scanState.grams)||100, r = g/100
+    const meal = { name:product.name, grams:g, cal:Math.round(product.cal*r*10)/10, prot:Math.round(product.prot*r*10)/10, carbs:Math.round(product.carbs*r*10)/10, fat:Math.round(product.fat*r*10)/10, fiber:Math.round((product.fiber||0)*r*10)/10, meal_type:mealType }
+    try {
+      const saved = await addMeal(userId, meal, today)
+      setMeals(p=>[...p, saved])
+    } catch(e){ console.error(e) }
+    setScanState(null)
   }
 
   const loadHistory = async () => {
@@ -662,7 +782,7 @@ function MacroFireApp({ session }) {
       setAiProg(2)
       const hasIng = tags.length>0
       const prompt = `Eres nutricionista deportivo experto en análisis visual. Analiza esta imagen de comida con máxima precisión.
-${hasIng?`\nINGREDIENTES CONFIRMADOS: ${tags.join(', ')}. Solo estima pesos.\n`:''}
+${hasIng?`\nINGREDIENTES CONFIRMADOS POR EL USUARIO (obligatorio incluirlos en el cálculo, aunque no se vean en la foto): ${tags.join(', ')}. Estos SÍ están presentes; estima gramos realistas para cada uno y suma sus calorías y grasa al total — no los omitas ni los subestimes.\n`:''}
 PASO 1 — Identifica alimentos, método de cocción, textura.
 PASO 2 — Usa referencias de escala (plato≈26cm, tenedor≈19cm).
 PASO 3 — Convierte a gramos (pollo cocido 0.95g/ml, arroz cocido 0.85g/ml, verdura 0.62g/ml, huevo=55g c/u, aceite cdita=4g).
@@ -866,6 +986,7 @@ Escribe el JSON entre estos markers:
 
   return (
     <div style={{minHeight:'100vh',background:T.bg,color:T.text,fontFamily:"'DM Sans',sans-serif"}}>
+      {showScanner && <BarcodeScanner onDetected={handleBarcodeDetected} onClose={()=>setShowScanner(false)}/>}
       {/* HEADER */}
       <header style={{background:T.surface,borderBottom:`1px solid ${T.border}`,position:'sticky',top:0,zIndex:50}}>
         <div style={{maxWidth:540,margin:'0 auto',padding:'0 16px'}}>
@@ -877,7 +998,11 @@ Escribe el JSON entre estos markers:
                 <div style={{fontSize:8,color:T.muted,letterSpacing:'0.16em',marginTop:1}}>TRACK · CALCULATE · ANALYZE</div>
               </div>
             </div>
-            <div style={{display:'flex',alignItems:'center',gap:10}}>
+            <div style={{display:'flex',alignItems:'center',gap:8}}>
+              {streak.current>0 && <div title={streak.best>streak.current?`Récord: ${streak.best} días`:''} style={{background:'#FFF4E8',borderRadius:8,padding:'4px 9px',textAlign:'center',display:'flex',alignItems:'center',gap:3}}>
+                <span style={{fontSize:13}}>🔥</span>
+                <span style={{fontSize:12,color:'#B35C1E',fontWeight:800}}>{streak.current}</span>
+              </div>}
               {goals && <div style={{background:T.protBg,borderRadius:8,padding:'4px 10px',textAlign:'right'}}>
                 <div style={{fontSize:11,color:T.prot,fontWeight:700}}>{goals.target_cal} kcal</div>
                 <div style={{fontSize:8,color:T.prot,opacity:.6}}>{goals.cal_fixed<0?'–300 déficit':goals.cal_fixed>0?'+300 superávit':'Mantenimiento'}</div>
@@ -903,7 +1028,10 @@ Escribe el JSON entre estos markers:
             <Card style={{marginBottom:12}}>
               <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:16}}>
                 <div>
-                  <SLabel>Hoy · {new Date().toLocaleDateString('es-ES',{weekday:'long',day:'numeric',month:'short'})}</SLabel>
+                  <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:2}}>
+                    <SLabel>Hoy · {new Date().toLocaleDateString('es-ES',{weekday:'long',day:'numeric',month:'short'})}</SLabel>
+                    {streak.current>0&&<span style={{fontSize:10,fontWeight:800,color:'#B35C1E',background:'#FFF4E8',borderRadius:20,padding:'1px 8px',display:'inline-flex',alignItems:'center',gap:3,marginBottom:9}}>🔥 {streak.current} día{streak.current!==1?'s':''}{streak.best>streak.current?` · récord ${streak.best}`:''}</span>}
+                  </div>
                   <div style={{display:'flex',alignItems:'baseline',gap:6}}>
                     <span style={{fontSize:52,fontWeight:700,fontFamily:"'Syne',sans-serif",letterSpacing:'-2px',lineHeight:1}}>{Math.round(totals.cal)}</span>
                     <span style={{fontSize:14,color:T.muted}}>kcal</span>
@@ -951,16 +1079,19 @@ Escribe el JSON entre estos markers:
                   </div>
                 </div>
               )}
-              <div style={{position:'relative',marginBottom:10}}>
-                <Inp value={foodInput} onChange={e=>onFoodChange(e.target.value)} onKeyDown={e=>e.key==='Enter'&&handleAddFood()} placeholder="Busca un alimento…"/>
-                {sugg.length>0&&<div style={{position:'absolute',top:'calc(100% + 4px)',left:0,right:0,background:T.surface,border:`1px solid ${T.border}`,borderRadius:12,zIndex:100,overflow:'hidden',boxShadow:'0 8px 24px rgba(0,0,0,0.1)'}}>
-                  {sugg.map(s=>(
-                    <div key={s} onClick={()=>{setFoodInput(s);setSugg([]);}} style={{padding:'10px 16px',cursor:'pointer',fontSize:13,color:T.sub,borderBottom:`1px solid ${T.border}`,display:'flex',justifyContent:'space-between'}}>
-                      <span style={{fontWeight:500}}>{s}</span>
-                      <span style={{fontSize:11,color:T.muted}}>{FOOD_DB[s]?.cal} kcal/100g</span>
-                    </div>
-                  ))}
-                </div>}
+              <div style={{display:'flex',gap:8,marginBottom:10}}>
+                <div style={{position:'relative',flex:1}}>
+                  <Inp value={foodInput} onChange={e=>onFoodChange(e.target.value)} onKeyDown={e=>e.key==='Enter'&&handleAddFood()} placeholder="Busca un alimento…"/>
+                  {sugg.length>0&&<div style={{position:'absolute',top:'calc(100% + 4px)',left:0,right:0,background:T.surface,border:`1px solid ${T.border}`,borderRadius:12,zIndex:100,overflow:'hidden',boxShadow:'0 8px 24px rgba(0,0,0,0.1)'}}>
+                    {sugg.map(s=>(
+                      <div key={s} onClick={()=>{setFoodInput(s);setSugg([]);}} style={{padding:'10px 16px',cursor:'pointer',fontSize:13,color:T.sub,borderBottom:`1px solid ${T.border}`,display:'flex',justifyContent:'space-between'}}>
+                        <span style={{fontWeight:500}}>{s}</span>
+                        <span style={{fontSize:11,color:T.muted}}>{FOOD_DB[s]?.cal} kcal/100g</span>
+                      </div>
+                    ))}
+                  </div>}
+                </div>
+                <BtnGhost onClick={()=>{setScanState(null);setShowScanner(true)}} style={{flexShrink:0,padding:'11px 14px'}} title="Escanear código de barras">📷</BtnGhost>
               </div>
               <div style={{display:'flex',gap:8}}>
                 <Inp value={grams} onChange={e=>setGrams(e.target.value)} placeholder="Gramos (default 100)" type="number" style={{flex:1}}/>
@@ -975,6 +1106,37 @@ Escribe el JSON entre estos markers:
                 </div>
               )}
             </Card>
+
+            {scanState&&(
+              <Card style={{marginBottom:12}}>
+                {scanState.status==='looking-up'&&<div style={{textAlign:'center',padding:'8px 0'}}><div style={{fontSize:13,color:T.sub,fontWeight:600}}>Buscando producto…</div></div>}
+                {scanState.status==='not-found'&&<div style={{textAlign:'center',padding:'8px 0'}}>
+                  <div style={{fontSize:13,color:T.err,fontWeight:600,marginBottom:8}}>Producto no encontrado en la base de datos</div>
+                  <BtnGhost onClick={()=>setScanState(null)}>Cerrar</BtnGhost>
+                </div>}
+                {scanState.status==='error'&&<div style={{textAlign:'center',padding:'8px 0'}}>
+                  <div style={{fontSize:13,color:T.err,fontWeight:600,marginBottom:8}}>Error al buscar el producto. Intenta de nuevo.</div>
+                  <BtnGhost onClick={()=>setScanState(null)}>Cerrar</BtnGhost>
+                </div>}
+                {scanState.status==='found'&&<div className="fade-up">
+                  <SLabel>Producto escaneado</SLabel>
+                  <div style={{fontSize:14,fontWeight:700,marginBottom:10}}>{scanState.product.name}</div>
+                  <div style={{display:'flex',gap:8,marginBottom:10}}>
+                    <Inp type="number" value={scanState.grams} onChange={e=>setScanState(p=>({...p,grams:e.target.value}))} placeholder="Gramos" style={{flex:1}}/>
+                  </div>
+                  <div style={{background:T.protBg,borderRadius:8,padding:'8px 12px',fontSize:11,color:T.prot,fontWeight:600,display:'flex',gap:10,flexWrap:'wrap',marginBottom:12}}>
+                    <span>{Math.round(scanState.product.cal*(parseFloat(scanState.grams)||100)/100)} kcal</span>
+                    <span>P {Math.round(scanState.product.prot*(parseFloat(scanState.grams)||100)/100*10)/10}g</span>
+                    <span>C {Math.round(scanState.product.carbs*(parseFloat(scanState.grams)||100)/100*10)/10}g</span>
+                    <span>G {Math.round(scanState.product.fat*(parseFloat(scanState.grams)||100)/100*10)/10}g</span>
+                  </div>
+                  <div style={{display:'flex',gap:8}}>
+                    <BtnPrimary onClick={addScannedProduct} style={{flex:1}}>+ Agregar al registro</BtnPrimary>
+                    <BtnGhost onClick={()=>setScanState(null)}>Cancelar</BtnGhost>
+                  </div>
+                </div>}
+              </Card>
+            )}
 
             {meals.length>0?(
               <Card>
@@ -1144,6 +1306,17 @@ Escribe el JSON entre estos markers:
                   <div style={{display:'flex',gap:10,alignItems:'flex-start',marginBottom:10}}>
                     <div style={{width:32,height:32,borderRadius:8,background:T.carbsBg,display:'flex',alignItems:'center',justifyContent:'center',fontSize:14,flexShrink:0}}>🎯</div>
                     <div><div style={{fontSize:13,fontWeight:700}}>Ingredientes confirmados</div><div style={{fontSize:11,color:T.muted,marginTop:1}}>Opcional · Mejora precisión hasta 40%</div></div>
+                  </div>
+                  <div style={{marginBottom:10}}>
+                    <div style={{fontSize:11,fontWeight:600,color:T.sub,marginBottom:6}}>¿Le pusiste algo de esto? La IA no siempre lo ve, y es lo que más se subestima:</div>
+                    <div style={{display:'flex',flexWrap:'wrap',gap:6}}>
+                      {HIDDEN_ADDITIONS.map(h=>{
+                        const active = tags.includes(h.tag)
+                        return (
+                          <button key={h.tag} onClick={()=>setTags(p=> active ? p.filter(t=>t!==h.tag) : [...p,h.tag])} style={{padding:'6px 11px',border:`1.5px solid ${active?T.prot:T.border}`,borderRadius:20,background:active?T.protBg:T.surface,color:active?T.prot:T.sub,cursor:'pointer',fontSize:11,fontWeight:600,transition:'all .15s'}}>{h.label}</button>
+                        )
+                      })}
+                    </div>
                   </div>
                   {tags.length>0&&<div style={{display:'flex',flexWrap:'wrap',gap:5,marginBottom:10}}>{tags.map((t,i)=><span key={i} style={{display:'inline-flex',alignItems:'center',gap:4,background:T.surface,border:`1px solid ${T.border}`,borderRadius:6,padding:'4px 10px 4px 12px',fontSize:12,fontWeight:600}}>{t}<button onClick={()=>setTags(p=>p.filter((_,j)=>j!==i))} style={{background:'none',border:'none',color:T.muted,cursor:'pointer',fontSize:14}}>×</button></span>)}</div>}
                   <div style={{display:'flex',gap:8}}>
